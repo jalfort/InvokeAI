@@ -166,6 +166,8 @@ GENERATION_MODES = Literal[
     "z_image_img2img",
     "z_image_inpaint",
     "z_image_outpaint",
+    "external_api_generate",
+    "external_api_edit",
 ]
 
 

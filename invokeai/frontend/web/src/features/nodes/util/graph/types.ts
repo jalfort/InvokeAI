@@ -15,7 +15,8 @@ export type ImageOutputNodes =
   | 'flux2_vae_decode'
   | 'sd3_l2i'
   | 'cogview4_l2i'
-  | 'z_image_l2i';
+  | 'z_image_l2i'
+  | 'fal_generate';
 
 export type LatentToImageNodes =
   | 'l2i'

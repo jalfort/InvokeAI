@@ -207,6 +207,9 @@ class InvokeAIAppConfig(BaseSettings):
     # MULTIUSER
     multiuser:                     bool = Field(default=False,              description="Enable multiuser support. When disabled, the application runs in single-user mode using a default system account with administrator privileges. When enabled, requires user authentication and authorization.")
 
+    # EXTERNAL API
+    fal_api_key:       Optional[str] = Field(default=None,               description="API key for FAL.ai external model provider. Can also be set via INVOKEAI_FAL_API_KEY or FAL_KEY environment variables.")
+
     # fmt: on
 
     model_config = SettingsConfigDict(env_prefix="INVOKEAI_", env_ignore_empty=True)

@@ -58,6 +58,7 @@ const tagTypes = [
   // especially related to the queue and generation.
   'FetchOnReconnect',
   'ClientState',
+  'ExternalApiProviders',
 ] as const;
 export type ApiTagDescription = TagDescription<(typeof tagTypes)[number]>;
 export const LIST_TAG = 'LIST';

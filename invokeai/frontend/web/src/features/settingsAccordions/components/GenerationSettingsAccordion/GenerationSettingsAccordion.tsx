@@ -1,8 +1,8 @@
 import type { FormLabelProps } from '@invoke-ai/ui-library';
-import { Box, Expander, Flex, FormControlGroup, StandaloneAccordion } from '@invoke-ai/ui-library';
+import { Box, Button, Expander, Flex, FormControlGroup, StandaloneAccordion } from '@invoke-ai/ui-library';
 import { EMPTY_ARRAY } from 'app/store/constants';
 import { createMemoizedSelector } from 'app/store/createMemoizedSelector';
-import { useAppSelector } from 'app/store/storeHooks';
+import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import { selectLoRAsSlice } from 'features/controlLayers/store/lorasSlice';
 import {
   selectFluxDypePreset,
@@ -12,6 +12,8 @@ import {
   selectIsSD3,
   selectIsZImage,
 } from 'features/controlLayers/store/paramsSlice';
+import { ExternalApiSettings } from 'features/externalApi/components/ExternalApiSettings';
+import { externalApiToggled, selectExternalApiIsEnabled } from 'features/externalApi/store/externalApiSlice';
 import { LoRAList } from 'features/lora/components/LoRAList';
 import LoRASelect from 'features/lora/components/LoRASelect';
 import ParamCFGScale from 'features/parameters/components/Core/ParamCFGScale';
@@ -27,7 +29,7 @@ import ParamZImageSeedVarianceSettings from 'features/parameters/components/Seed
 import { MainModelPicker } from 'features/settingsAccordions/components/GenerationSettingsAccordion/MainModelPicker';
 import { useExpanderToggle } from 'features/settingsAccordions/hooks/useExpanderToggle';
 import { useStandaloneAccordionToggle } from 'features/settingsAccordions/hooks/useStandaloneAccordionToggle';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelectedModelConfig } from 'services/api/hooks/useSelectedModelConfig';
 import { isFluxFillMainModelModelConfig } from 'services/api/types';
@@ -38,6 +40,7 @@ const formLabelProps: FormLabelProps = {
 
 export const GenerationSettingsAccordion = memo(() => {
   const { t } = useTranslation();
+  const dispatch = useAppDispatch();
   const modelConfig = useSelectedModelConfig();
   const isFLUX = useAppSelector(selectIsFLUX);
   const isFlux2 = useAppSelector(selectIsFlux2);
@@ -45,16 +48,28 @@ export const GenerationSettingsAccordion = memo(() => {
   const isCogView4 = useAppSelector(selectIsCogView4);
   const isZImage = useAppSelector(selectIsZImage);
   const fluxDypePreset = useAppSelector(selectFluxDypePreset);
+  const isExternalApi = useAppSelector(selectExternalApiIsEnabled);
+
+  const onToggleLocal = useCallback(() => {
+    dispatch(externalApiToggled(false));
+  }, [dispatch]);
+  const onToggleExternal = useCallback(() => {
+    dispatch(externalApiToggled(true));
+  }, [dispatch]);
 
   const selectBadges = useMemo(
     () =>
       createMemoizedSelector(selectLoRAsSlice, (loras) => {
         const enabledLoRAsCount = loras.loras.filter((l) => l.isEnabled).length;
         const loraTabBadges = enabledLoRAsCount ? [`${enabledLoRAsCount} ${t('models.concepts')}`] : EMPTY_ARRAY;
-        const accordionBadges = modelConfig ? [modelConfig.name, modelConfig.base] : EMPTY_ARRAY;
+        const accordionBadges = isExternalApi
+          ? ['External API']
+          : modelConfig
+            ? [modelConfig.name, modelConfig.base]
+            : EMPTY_ARRAY;
         return { loraTabBadges, accordionBadges };
       }),
-    [modelConfig, t]
+    [modelConfig, isExternalApi, t]
   );
   const { loraTabBadges, accordionBadges } = useAppSelector(selectBadges);
   const { isOpen: isOpenExpander, onToggle: onToggleExpander } = useExpanderToggle({
@@ -74,27 +89,54 @@ export const GenerationSettingsAccordion = memo(() => {
       onToggle={onToggleAccordion}
     >
       <Box px={4} pt={4} data-testid="generation-accordion">
-        <Flex gap={4} flexDir="column" pb={0}>
-          <MainModelPicker />
-          <LoRASelect />
-          <LoRAList />
+        <Flex gap={2} mb={4}>
+          <Button
+            size="sm"
+            variant={isExternalApi ? 'ghost' : 'solid'}
+            colorScheme={isExternalApi ? 'base' : 'invokeBlue'}
+            onClick={onToggleLocal}
+            flex={1}
+          >
+            Local
+          </Button>
+          <Button
+            size="sm"
+            variant={isExternalApi ? 'solid' : 'ghost'}
+            colorScheme={isExternalApi ? 'invokeBlue' : 'base'}
+            onClick={onToggleExternal}
+            flex={1}
+          >
+            External API
+          </Button>
         </Flex>
-        <Expander label={t('accordions.advanced.options')} isOpen={isOpenExpander} onToggle={onToggleExpander}>
-          <Flex gap={4} flexDir="column" pb={4}>
-            <FormControlGroup formLabelProps={formLabelProps}>
-              {!isFLUX && !isFlux2 && !isSD3 && !isCogView4 && !isZImage && <ParamScheduler />}
-              {isFLUX && <ParamFluxScheduler />}
-              {isZImage && <ParamZImageScheduler />}
-              <ParamSteps />
-              {(isFLUX || isFlux2) && modelConfig && !isFluxFillMainModelModelConfig(modelConfig) && <ParamGuidance />}
-              {!isFLUX && !isFlux2 && <ParamCFGScale />}
-              {isFLUX && <ParamFluxDypePreset />}
-              {isFLUX && fluxDypePreset === 'manual' && <ParamFluxDypeScale />}
-              {isFLUX && fluxDypePreset === 'manual' && <ParamFluxDypeExponent />}
-            </FormControlGroup>
-            {isZImage && <ParamZImageSeedVarianceSettings />}
-          </Flex>
-        </Expander>
+
+        {isExternalApi ? (
+          <ExternalApiSettings />
+        ) : (
+          <>
+            <Flex gap={4} flexDir="column" pb={0}>
+              <MainModelPicker />
+              <LoRASelect />
+              <LoRAList />
+            </Flex>
+            <Expander label={t('accordions.advanced.options')} isOpen={isOpenExpander} onToggle={onToggleExpander}>
+              <Flex gap={4} flexDir="column" pb={4}>
+                <FormControlGroup formLabelProps={formLabelProps}>
+                  {!isFLUX && !isFlux2 && !isSD3 && !isCogView4 && !isZImage && <ParamScheduler />}
+                  {isFLUX && <ParamFluxScheduler />}
+                  {isZImage && <ParamZImageScheduler />}
+                  <ParamSteps />
+                  {(isFLUX || isFlux2) && modelConfig && !isFluxFillMainModelModelConfig(modelConfig) && <ParamGuidance />}
+                  {!isFLUX && !isFlux2 && <ParamCFGScale />}
+                  {isFLUX && <ParamFluxDypePreset />}
+                  {isFLUX && fluxDypePreset === 'manual' && <ParamFluxDypeScale />}
+                  {isFLUX && fluxDypePreset === 'manual' && <ParamFluxDypeExponent />}
+                </FormControlGroup>
+                {isZImage && <ParamZImageSeedVarianceSettings />}
+              </Flex>
+            </Expander>
+          </>
+        )}
       </Box>
     </StandaloneAccordion>
   );

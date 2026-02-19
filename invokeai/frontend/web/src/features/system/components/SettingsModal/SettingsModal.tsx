@@ -20,6 +20,7 @@ import { InformationalPopover } from 'common/components/InformationalPopover/Inf
 import ScrollableContent from 'common/components/OverlayScrollbars/ScrollableContent';
 import { buildUseBoolean } from 'common/hooks/useBoolean';
 import { selectShouldUseCPUNoise, shouldUseCpuNoiseChanged } from 'features/controlLayers/store/paramsSlice';
+import { ExternalApiKeySettings } from 'features/externalApi/components/ExternalApiKeySettings';
 import { useRefreshAfterResetModal } from 'features/system/components/SettingsModal/RefreshAfterResetModal';
 import { SettingsDeveloperLogIsEnabled } from 'features/system/components/SettingsModal/SettingsDeveloperLogIsEnabled';
 import { SettingsDeveloperLogLevel } from 'features/system/components/SettingsModal/SettingsDeveloperLogLevel';
@@ -254,6 +255,10 @@ const SettingsModal = (props: { children: ReactElement }) => {
                     <SettingsDeveloperLogIsEnabled />
                     <SettingsDeveloperLogLevel />
                     <SettingsDeveloperLogNamespaces />
+                  </StickyScrollable>
+
+                  <StickyScrollable title="External APIs">
+                    <ExternalApiKeySettings />
                   </StickyScrollable>
 
                   <StickyScrollable title={t('settings.clearIntermediates')}>

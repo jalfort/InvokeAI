@@ -22,6 +22,8 @@ import {
 import type { DynamicPromptsState } from 'features/dynamicPrompts/store/dynamicPromptsSlice';
 import { selectDynamicPromptsSlice } from 'features/dynamicPrompts/store/dynamicPromptsSlice';
 import { getShouldProcessPrompt } from 'features/dynamicPrompts/util/getShouldProcessPrompt';
+import type { ExternalApiState } from 'features/externalApi/store/externalApiSlice';
+import { selectExternalApiSlice } from 'features/externalApi/store/externalApiSlice';
 import { SUPPORTS_REF_IMAGES_BASE_MODELS } from 'features/modelManagerV2/models';
 import { $templates } from 'features/nodes/store/nodesSlice';
 import { selectNodesSlice } from 'features/nodes/store/selectors';
@@ -73,6 +75,7 @@ type UpdateReasonsArg = {
   params: ParamsState;
   refImages: RefImagesState;
   dynamicPrompts: DynamicPromptsState;
+  externalApi: ExternalApiState;
   canvasIsFiltering: boolean;
   canvasIsTransforming: boolean;
   canvasIsRasterizing: boolean;
@@ -94,6 +97,7 @@ const debouncedUpdateReasons = debounce(async (arg: UpdateReasonsArg) => {
     params,
     refImages,
     dynamicPrompts,
+    externalApi,
     canvasIsFiltering,
     canvasIsTransforming,
     canvasIsRasterizing,
@@ -114,6 +118,7 @@ const debouncedUpdateReasons = debounce(async (arg: UpdateReasonsArg) => {
       params,
       refImages,
       dynamicPrompts,
+      externalApi,
       loras,
     });
     $reasonsWhyCannotEnqueue.set(reasons);
@@ -126,6 +131,7 @@ const debouncedUpdateReasons = debounce(async (arg: UpdateReasonsArg) => {
       params,
       refImages,
       dynamicPrompts,
+      externalApi,
       canvasIsFiltering,
       canvasIsTransforming,
       canvasIsRasterizing,
@@ -168,6 +174,7 @@ export const useReadinessWatcher = () => {
   const nodes = useAppSelector(selectNodesSlice);
   const workflowSettings = useAppSelector(selectWorkflowSettingsSlice);
   const upscale = useAppSelector(selectUpscaleSlice);
+  const externalApi = useAppSelector(selectExternalApiSlice);
   const loras = useAppSelector(selectAddedLoRAs);
   const templates = useStore($templates);
   const isConnected = useStore($isConnected);
@@ -184,6 +191,7 @@ export const useReadinessWatcher = () => {
       params,
       refImages,
       dynamicPrompts,
+      externalApi,
       canvasIsFiltering,
       canvasIsTransforming,
       canvasIsRasterizing,
@@ -206,6 +214,7 @@ export const useReadinessWatcher = () => {
     canvasIsSelectingObject,
     canvasIsTransforming,
     dynamicPrompts,
+    externalApi,
     isConnected,
     nodes,
     params,
@@ -226,8 +235,9 @@ const getReasonsWhyCannotEnqueueGenerateTab = (arg: {
   refImages: RefImagesState;
   loras: LoRA[];
   dynamicPrompts: DynamicPromptsState;
+  externalApi: ExternalApiState;
 }) => {
-  const { isConnected, model, params, refImages, loras, dynamicPrompts } = arg;
+  const { isConnected, model, params, refImages, loras, dynamicPrompts, externalApi } = arg;
   const { positivePrompt } = params;
   const reasons: Reason[] = [];
 
@@ -237,6 +247,11 @@ const getReasonsWhyCannotEnqueueGenerateTab = (arg: {
 
   if (dynamicPrompts.prompts.length === 0 && getShouldProcessPrompt(positivePrompt)) {
     reasons.push({ content: i18n.t('parameters.invoke.noPrompts') });
+  }
+
+  // When external API is enabled, skip model/LoRA/ref image model validation
+  if (externalApi.isEnabled) {
+    return reasons;
   }
 
   if (!model) {
@@ -437,6 +452,7 @@ const getReasonsWhyCannotEnqueueCanvasTab = (arg: {
   refImages: RefImagesState;
   loras: LoRA[];
   dynamicPrompts: DynamicPromptsState;
+  externalApi: ExternalApiState;
   canvasIsFiltering: boolean;
   canvasIsTransforming: boolean;
   canvasIsRasterizing: boolean;
@@ -451,6 +467,7 @@ const getReasonsWhyCannotEnqueueCanvasTab = (arg: {
     refImages,
     loras,
     dynamicPrompts,
+    externalApi,
     canvasIsFiltering,
     canvasIsTransforming,
     canvasIsRasterizing,
@@ -482,6 +499,11 @@ const getReasonsWhyCannotEnqueueCanvasTab = (arg: {
 
   if (dynamicPrompts.prompts.length === 0 && getShouldProcessPrompt(positivePrompt)) {
     reasons.push({ content: i18n.t('parameters.invoke.noPrompts') });
+  }
+
+  // When external API is enabled, skip model/LoRA/bbox/layer validation
+  if (externalApi.isEnabled) {
+    return reasons;
   }
 
   if (!model) {

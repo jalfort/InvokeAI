@@ -5,8 +5,11 @@ import { useAppStore } from 'app/store/storeHooks';
 import { extractMessageFromAssertionError } from 'common/util/extractMessageFromAssertionError';
 import { withResult, withResultAsync } from 'common/util/result';
 import { positivePromptAddedToHistory, selectPositivePrompt } from 'features/controlLayers/store/paramsSlice';
+import { selectExternalApiIsEnabled } from 'features/externalApi/store/externalApiSlice';
+import type { BaseModelType } from 'features/nodes/types/common';
 import { prepareLinearUIBatch } from 'features/nodes/util/graph/buildLinearBatchConfig';
 import { buildCogView4Graph } from 'features/nodes/util/graph/generation/buildCogView4Graph';
+import { buildExternalAPIGraph } from 'features/nodes/util/graph/generation/buildExternalAPIGraph';
 import { buildFLUXGraph } from 'features/nodes/util/graph/generation/buildFLUXGraph';
 import { buildSD1Graph } from 'features/nodes/util/graph/generation/buildSD1Graph';
 import { buildSD3Graph } from 'features/nodes/util/graph/generation/buildSD3Graph';
@@ -27,15 +30,26 @@ const enqueueGenerate = async (store: AppStore, prepend: boolean) => {
 
   const state = getState();
 
-  const model = state.params.model;
-  if (!model) {
-    log.error('No model found in state');
-    return;
+  const isExternalApi = selectExternalApiIsEnabled(state);
+
+  let base: BaseModelType;
+  if (isExternalApi) {
+    base = 'any';
+  } else {
+    const model = state.params.model;
+    if (!model) {
+      log.error('No model found in state');
+      return;
+    }
+    base = model.base;
   }
-  const base = model.base;
 
   const buildGraphResult = await withResultAsync(async () => {
     const graphBuilderArg: GraphBuilderArg = { generationMode: 'txt2img', state, manager: null };
+
+    if (isExternalApi) {
+      return await buildExternalAPIGraph(graphBuilderArg);
+    }
 
     switch (base) {
       case 'sdxl':

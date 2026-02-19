@@ -7,8 +7,11 @@ import { withResult, withResultAsync } from 'common/util/result';
 import { useCanvasManagerSafe } from 'features/controlLayers/contexts/CanvasManagerProviderGate';
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { positivePromptAddedToHistory, selectPositivePrompt } from 'features/controlLayers/store/paramsSlice';
+import { selectExternalApiIsEnabled } from 'features/externalApi/store/externalApiSlice';
+import type { BaseModelType } from 'features/nodes/types/common';
 import { prepareLinearUIBatch } from 'features/nodes/util/graph/buildLinearBatchConfig';
 import { buildCogView4Graph } from 'features/nodes/util/graph/generation/buildCogView4Graph';
+import { buildExternalAPIGraph } from 'features/nodes/util/graph/generation/buildExternalAPIGraph';
 import { buildFLUXGraph } from 'features/nodes/util/graph/generation/buildFLUXGraph';
 import { buildSD1Graph } from 'features/nodes/util/graph/generation/buildSD1Graph';
 import { buildSD3Graph } from 'features/nodes/util/graph/generation/buildSD3Graph';
@@ -32,17 +35,29 @@ const enqueueCanvas = async (store: AppStore, canvasManager: CanvasManager, prep
 
   const destination = selectCanvasDestination(state);
 
-  const model = state.params.model;
-  if (!model) {
-    log.error('No model found in state');
-    return;
-  }
+  const isExternalApi = selectExternalApiIsEnabled(state);
 
-  const base = model.base;
+  // Determine the base model type - for external API, model selection is optional
+  let base: BaseModelType;
+  if (isExternalApi) {
+    base = 'any';
+  } else {
+    const model = state.params.model;
+    if (!model) {
+      log.error('No model found in state');
+      return;
+    }
+    base = model.base;
+  }
 
   const buildGraphResult = await withResultAsync(async () => {
     const generationMode = await canvasManager.compositor.getGenerationMode();
     const graphBuilderArg: GraphBuilderArg = { generationMode, state, manager: canvasManager };
+
+    // External API takes priority over local model pipeline
+    if (isExternalApi) {
+      return await buildExternalAPIGraph(graphBuilderArg);
+    }
 
     switch (base) {
       case 'sdxl':
