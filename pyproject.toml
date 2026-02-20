@@ -69,6 +69,7 @@ dependencies = [
   "Deprecated",
   "dnspython",
   "fal-client",
+  "google-genai",
   "dynamicprompts",
   "einops",
   "email-validator>=2.0.0",

@@ -6,14 +6,40 @@ type ProviderStatus = {
   provider: string;
   display_name: string;
   is_configured: boolean;
+  is_available: boolean;
+  capability_type: 'image' | 'text' | 'image_text';
 };
 
 type ProviderListResponse = {
   providers: ProviderStatus[];
 };
 
+type ProviderCapabilities = {
+  supports_refs_in_generate: boolean;
+  supports_masks: boolean;
+  max_refs: number;
+  max_images_per_call: number;
+  supported_resolutions: string[];
+  has_seed: boolean;
+  has_guidance_scale: boolean;
+  output_formats: string[];
+  capability_type: 'image' | 'text' | 'image_text';
+};
+
+type ModelWithCapabilities = {
+  id: string;
+  name: string;
+  provider_id: string;
+  description: string;
+  capabilities: ProviderCapabilities | null;
+};
+
+type ModelListResponse = {
+  models: ModelWithCapabilities[];
+};
+
 type SetKeyRequest = {
-  provider: 'fal';
+  provider: string;
   api_key: string;
   persist?: boolean;
 };
@@ -38,6 +64,13 @@ export const externalApiEndpoints = api.injectEndpoints({
       }),
       providesTags: ['FetchOnReconnect', 'ExternalApiProviders'],
     }),
+    getExternalApiModels: build.query<ModelListResponse, void>({
+      query: () => ({
+        url: buildExternalApiUrl('models'),
+        method: 'GET',
+      }),
+      providesTags: ['FetchOnReconnect', 'ExternalApiProviders'],
+    }),
     setExternalApiKey: build.mutation<SetKeyResponse, SetKeyRequest>({
       query: (body) => ({
         url: buildExternalApiUrl('set_key'),
@@ -46,7 +79,7 @@ export const externalApiEndpoints = api.injectEndpoints({
       }),
       invalidatesTags: ['ExternalApiProviders'],
     }),
-    testExternalApiKey: build.mutation<TestKeyResponse, 'fal'>({
+    testExternalApiKey: build.mutation<TestKeyResponse, string>({
       query: (provider) => ({
         url: buildExternalApiUrl('test_key'),
         method: 'POST',
@@ -56,5 +89,9 @@ export const externalApiEndpoints = api.injectEndpoints({
   }),
 });
 
-export const { useGetExternalApiProvidersQuery, useSetExternalApiKeyMutation, useTestExternalApiKeyMutation } =
-  externalApiEndpoints;
+export const {
+  useGetExternalApiProvidersQuery,
+  useGetExternalApiModelsQuery,
+  useSetExternalApiKeyMutation,
+  useTestExternalApiKeyMutation,
+} = externalApiEndpoints;

@@ -29,7 +29,7 @@ ATTENTION_TYPE = Literal["auto", "normal", "xformers", "sliced", "torch-sdp"]
 ATTENTION_SLICE_SIZE = Literal["auto", "balanced", "max", 1, 2, 3, 4, 5, 6, 7, 8]
 LOG_FORMAT = Literal["plain", "color", "syslog", "legacy"]
 LOG_LEVEL = Literal["debug", "info", "warning", "error", "critical"]
-CONFIG_SCHEMA_VERSION = "4.0.2"
+CONFIG_SCHEMA_VERSION = "4.0.3"
 
 
 class URLRegexTokenPair(BaseModel):
@@ -208,7 +208,8 @@ class InvokeAIAppConfig(BaseSettings):
     multiuser:                     bool = Field(default=False,              description="Enable multiuser support. When disabled, the application runs in single-user mode using a default system account with administrator privileges. When enabled, requires user authentication and authorization.")
 
     # EXTERNAL API
-    fal_api_key:       Optional[str] = Field(default=None,               description="API key for FAL.ai external model provider. Can also be set via INVOKEAI_FAL_API_KEY or FAL_KEY environment variables.")
+    api_keys:     dict[str, str] = Field(default_factory=dict,      description="API keys for external providers, keyed by provider_id (e.g. {'fal': 'xxx', 'gemini': 'yyy'}).")
+    fal_api_key:       Optional[str] = Field(default=None,               description="(Deprecated) API key for FAL.ai. Use api_keys instead. Kept for backward compatibility.")
 
     # fmt: on
 
@@ -257,7 +258,7 @@ class InvokeAIAppConfig(BaseSettings):
                 exclude_unset=False if as_example else True,
                 exclude_defaults=False if as_example else True,
                 exclude_none=True if as_example else False,
-                exclude={"schema_version", "legacy_models_yaml_path"},
+                exclude={"schema_version", "legacy_models_yaml_path", "fal_api_key"},
             )
 
             if as_example:
@@ -456,6 +457,27 @@ def migrate_v4_0_1_to_4_0_2_config_dict(config_dict: dict[str, Any]) -> dict[str
     return parsed_config_dict
 
 
+def migrate_v4_0_2_to_4_0_3_config_dict(config_dict: dict[str, Any]) -> dict[str, Any]:
+    """Migrate v4.0.2 config dictionary to a v4.0.3 config dictionary.
+
+    Args:
+        config_dict: A dictionary of settings from a v4.0.2 config file.
+
+    Returns:
+        A config dict with the settings migrated to v4.0.3.
+    """
+    parsed_config_dict: dict[str, Any] = copy.deepcopy(config_dict)
+    # Migrate fal_api_key into unified api_keys dict
+    fal_key = parsed_config_dict.pop("fal_api_key", None)
+    api_keys: dict[str, str] = parsed_config_dict.get("api_keys", {})
+    if fal_key and "fal" not in api_keys:
+        api_keys["fal"] = fal_key
+    if api_keys:
+        parsed_config_dict["api_keys"] = api_keys
+    parsed_config_dict["schema_version"] = "4.0.3"
+    return parsed_config_dict
+
+
 def load_and_migrate_config(config_path: Path) -> InvokeAIAppConfig:
     """Load and migrate a config file to the latest version.
 
@@ -481,6 +503,9 @@ def load_and_migrate_config(config_path: Path) -> InvokeAIAppConfig:
     if loaded_config_dict["schema_version"] == "4.0.1":
         migrated = True
         loaded_config_dict = migrate_v4_0_1_to_4_0_2_config_dict(loaded_config_dict)
+    if loaded_config_dict["schema_version"] == "4.0.2":
+        migrated = True
+        loaded_config_dict = migrate_v4_0_2_to_4_0_3_config_dict(loaded_config_dict)
 
     if migrated:
         shutil.copy(config_path, config_path.with_suffix(".yaml.bak"))

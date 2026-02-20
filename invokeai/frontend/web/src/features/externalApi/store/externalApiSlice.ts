@@ -31,9 +31,9 @@ const zExternalApiGenerationMode = z.enum(['generate', 'edit']);
 export type ExternalApiGenerationMode = z.infer<typeof zExternalApiGenerationMode>;
 
 const zExternalApiState = z.object({
-  _version: z.literal(1),
+  _version: z.literal(2),
   isEnabled: z.boolean(),
-  provider: z.literal('fal'),
+  providerId: z.string(),
   modelId: z.string(),
   generationMode: zExternalApiGenerationMode,
   aspectRatio: zExternalApiAspectRatio,
@@ -46,9 +46,9 @@ const zExternalApiState = z.object({
 export type ExternalApiState = z.infer<typeof zExternalApiState>;
 
 const getInitialState = (): ExternalApiState => ({
-  _version: 1,
+  _version: 2,
   isEnabled: false,
-  provider: 'fal',
+  providerId: 'fal',
   modelId: 'fal-ai/nano-banana-pro',
   generationMode: 'generate',
   aspectRatio: '1:1',
@@ -65,6 +65,9 @@ const slice = createSlice({
   reducers: {
     externalApiToggled: (state, action: PayloadAction<boolean>) => {
       state.isEnabled = action.payload;
+    },
+    externalApiProviderChanged: (state, action: PayloadAction<string>) => {
+      state.providerId = action.payload;
     },
     externalApiModelChanged: (state, action: PayloadAction<string>) => {
       state.modelId = action.payload;
@@ -95,6 +98,7 @@ const slice = createSlice({
 
 export const {
   externalApiToggled,
+  externalApiProviderChanged,
   externalApiModelChanged,
   externalApiGenerationModeChanged,
   externalApiAspectRatioChanged,
@@ -112,9 +116,19 @@ export const externalApiSliceConfig: SliceConfig<typeof slice> = {
   persistConfig: {
     migrate: (state) => {
       assert(isPlainObject(state));
-      if (!('_version' in state)) {
-        state._version = 1;
+
+      // Migrate v1 -> v2: rename 'provider' to 'providerId'
+      if (!('_version' in state) || state._version === 1) {
+        state._version = 2;
+        if ('provider' in state && !('providerId' in state)) {
+          state.providerId = state.provider;
+          delete state.provider;
+        }
+        if (!('providerId' in state)) {
+          state.providerId = 'fal';
+        }
       }
+
       return zExternalApiState.parse(state);
     },
   },
@@ -125,7 +139,7 @@ const createExternalApiSelector = <T>(selector: Selector<ExternalApiState, T>) =
   createSelector(selectExternalApiSlice, selector);
 
 export const selectExternalApiIsEnabled = createExternalApiSelector((s) => s.isEnabled);
-export const selectExternalApiProvider = createExternalApiSelector((s) => s.provider);
+export const selectExternalApiProviderId = createExternalApiSelector((s) => s.providerId);
 export const selectExternalApiModelId = createExternalApiSelector((s) => s.modelId);
 export const selectExternalApiGenerationMode = createExternalApiSelector((s) => s.generationMode);
 export const selectExternalApiAspectRatio = createExternalApiSelector((s) => s.aspectRatio);
