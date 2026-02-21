@@ -11,6 +11,7 @@ import {
 } from '@invoke-ai/ui-library';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import { ExternalApiReferenceImages } from 'features/externalApi/components/ExternalApiReferenceImages';
+import { useExternalApiAutoMode } from 'features/externalApi/hooks/useExternalApiAutoMode';
 import type {
   ExternalApiAspectRatio,
   ExternalApiGenerationMode,
@@ -30,6 +31,7 @@ import {
   selectExternalApiEnableWebSearch,
   selectExternalApiGenerationMode,
   selectExternalApiModelId,
+  selectExternalApiModeSource,
   selectExternalApiOutputFormat,
   selectExternalApiProviderId,
   selectExternalApiResolution,
@@ -38,11 +40,6 @@ import {
 import type { ChangeEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useGetExternalApiModelsQuery, useGetExternalApiProvidersQuery } from 'services/api/endpoints/externalApi';
-
-const MODE_OPTIONS: ComboboxOption[] = [
-  { value: 'generate', label: 'Generate' },
-  { value: 'edit', label: 'Edit' },
-];
 
 const ASPECT_RATIO_OPTIONS: ComboboxOption[] = [
   { value: 'auto', label: 'Auto' },
@@ -76,9 +73,11 @@ const FALLBACK_MODEL_OPTIONS: ComboboxOption[] = [
 
 export const ExternalApiSettings = memo(() => {
   const dispatch = useAppDispatch();
+  useExternalApiAutoMode();
   const providerId = useAppSelector(selectExternalApiProviderId);
   const modelId = useAppSelector(selectExternalApiModelId);
   const generationMode = useAppSelector(selectExternalApiGenerationMode);
+  const modeSource = useAppSelector(selectExternalApiModeSource);
   const aspectRatio = useAppSelector(selectExternalApiAspectRatio);
   const resolution = useAppSelector(selectExternalApiResolution);
   const enableWebSearch = useAppSelector(selectExternalApiEnableWebSearch);
@@ -155,12 +154,23 @@ export const ExternalApiSettings = memo(() => {
     return capabilities.supported_resolutions.map((r) => ({ value: r, label: r }));
   }, [capabilities]);
 
+  const modeOptions = useMemo(
+    (): ComboboxOption[] => [
+      { value: 'generate', label: 'Generate' },
+      {
+        value: 'edit',
+        label: modeSource === 'auto' && generationMode === 'edit' ? 'Edit (Canvas Modified)' : 'Edit',
+      },
+    ],
+    [modeSource, generationMode]
+  );
+
   const modelValue = useMemo(() => modelOptions.find((o) => o.value === modelId) ?? null, [modelOptions, modelId]);
   const providerValue = useMemo(
     () => providerOptions.find((o) => o.value === providerId) ?? null,
     [providerOptions, providerId]
   );
-  const modeValue = useMemo(() => MODE_OPTIONS.find((o) => o.value === generationMode) ?? null, [generationMode]);
+  const modeValue = useMemo(() => modeOptions.find((o) => o.value === generationMode) ?? null, [modeOptions, generationMode]);
   const aspectRatioValue = useMemo(
     () => ASPECT_RATIO_OPTIONS.find((o) => o.value === aspectRatio) ?? null,
     [aspectRatio]
@@ -296,7 +306,7 @@ export const ExternalApiSettings = memo(() => {
 
       <FormControl>
         <FormLabel>Mode</FormLabel>
-        <Combobox value={modeValue} options={MODE_OPTIONS} onChange={onModeChange} />
+        <Combobox value={modeValue} options={modeOptions} onChange={onModeChange} />
       </FormControl>
 
       <ExternalApiReferenceImages />

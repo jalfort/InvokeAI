@@ -9,11 +9,11 @@ import type { GraphBuilderArg, GraphBuilderReturn } from 'features/nodes/util/gr
 const log = logger('system');
 
 export const buildExternalAPIGraph = async (arg: GraphBuilderArg): Promise<GraphBuilderReturn> => {
-  const { generationMode, state, manager } = arg;
+  const { state, manager, preCompositedCanvas } = arg;
   const externalApi = selectExternalApiSlice(state);
 
   log.debug(
-    { generationMode, provider: externalApi.providerId, modelId: externalApi.modelId },
+    { provider: externalApi.providerId, modelId: externalApi.modelId },
     'Building External API graph'
   );
 
@@ -31,36 +31,58 @@ export const buildExternalAPIGraph = async (arg: GraphBuilderArg): Promise<Graph
     type: 'integer',
   });
 
-  // Collect reference images from the external API slice
+  // Collect user-added reference images from the external API slice
   const referenceImageFields: { image_name: string }[] = externalApi.referenceImageNames.map((name) => ({
     image_name: name,
   }));
 
-  // For edit/inpaint mode on canvas: composite the raster layers and prepend as first reference image
+  // === Canvas composite ===
+  // If caller already pre-processed the canvas (transparency fill + downscale), use that.
+  // Otherwise fall back to direct compositing (e.g. when called without pre-processing).
+  let hasCanvasContent = false;
   let maskImageField: { image_name: string } | undefined;
 
-  if ((generationMode === 'img2img' || generationMode === 'inpaint') && manager) {
+  if (preCompositedCanvas) {
+    // Pre-composited canvas from prepareCanvasComposite (already flattened + downscaled)
+    referenceImageFields.unshift({ image_name: preCompositedCanvas.image_name });
+    hasCanvasContent = true;
+  } else if (manager) {
     const canvas = selectCanvasSlice(state);
     const { rect } = canvas.bbox;
-    const rasterAdapters = manager.compositor.getVisibleAdaptersOfType('raster_layer');
-    const compositeDTO = await manager.compositor.getCompositeImageDTO(rasterAdapters, rect, {
-      is_intermediate: true,
-      silent: true,
-    });
-    referenceImageFields.unshift({ image_name: compositeDTO.image_name });
 
-    // For inpaint mode: get the mask composite for mask-as-annotation pipeline
-    if (generationMode === 'inpaint') {
-      const inpaintMaskAdapters = manager.compositor.getVisibleAdaptersOfType('inpaint_mask');
-      if (inpaintMaskAdapters.length > 0) {
-        const maskDTO = await manager.compositor.getCompositeImageDTO(inpaintMaskAdapters, rect, {
-          is_intermediate: true,
-          silent: true,
-        });
-        maskImageField = { image_name: maskDTO.image_name };
-      }
+    const rasterAdapters = manager.compositor.getVisibleAdaptersOfType('raster_layer');
+
+    if (rasterAdapters.length > 0) {
+      const compositeDTO = await manager.compositor.getCompositeImageDTO(rasterAdapters, rect, {
+        is_intermediate: true,
+        silent: true,
+      });
+      referenceImageFields.unshift({ image_name: compositeDTO.image_name });
+      hasCanvasContent = true;
     }
   }
+
+  // Handle inpaint masks (only meaningful when there's canvas content to mask against)
+  if (hasCanvasContent && manager) {
+    const canvas = selectCanvasSlice(state);
+    const { rect } = canvas.bbox;
+    const inpaintMaskAdapters = manager.compositor.getVisibleAdaptersOfType('inpaint_mask');
+    if (inpaintMaskAdapters.length > 0) {
+      const maskDTO = await manager.compositor.getCompositeImageDTO(inpaintMaskAdapters, rect, {
+        is_intermediate: true,
+        silent: true,
+      });
+      maskImageField = { image_name: maskDTO.image_name };
+    }
+  }
+
+  // Determine mode: canvas content forces edit; otherwise use user's choice
+  const effectiveMode = hasCanvasContent ? 'edit' : externalApi.generationMode;
+
+  log.debug(
+    { hasCanvasContent, effectiveMode, userMode: externalApi.generationMode, refCount: referenceImageFields.length },
+    'External API mode resolved'
+  );
 
   // Build the external_api_generate node (provider-agnostic)
   // external_api_generate not in generated schema yet — run `pnpm typegen` with backend to resolve
@@ -70,7 +92,7 @@ export const buildExternalAPIGraph = async (arg: GraphBuilderArg): Promise<Graph
     id: getPrefixedId('external_api_generate'),
     provider_id: externalApi.providerId,
     model_id: externalApi.modelId,
-    mode: externalApi.generationMode,
+    mode: effectiveMode,
     reference_images: referenceImageFields,
     mask_image: maskImageField ?? null,
     aspect_ratio: externalApi.aspectRatio,
@@ -91,7 +113,7 @@ export const buildExternalAPIGraph = async (arg: GraphBuilderArg): Promise<Graph
   // Metadata
   g.upsertMetadata({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    generation_mode: `external_api_${externalApi.generationMode}` as any,
+    generation_mode: `external_api_${effectiveMode}` as any,
   });
   g.addEdgeToMetadata(seed, 'value', 'seed');
   g.addEdgeToMetadata(positivePrompt, 'value', 'positive_prompt');

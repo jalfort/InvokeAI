@@ -6,6 +6,7 @@ import { CropImageModal } from 'features/cropper/components/CropImageModal';
 import { DeleteImageModal } from 'features/deleteImageModal/components/DeleteImageModal';
 import { FullscreenDropzone } from 'features/dnd/FullscreenDropzone';
 import { DynamicPromptsModal } from 'features/dynamicPrompts/components/DynamicPromptsPreviewModal';
+import { TransparencyFillDialog } from 'features/externalApi/components/TransparencyFillDialog';
 import DeleteBoardModal from 'features/gallery/components/Boards/DeleteBoardModal';
 import { ImageContextMenu } from 'features/gallery/components/ContextMenu/ImageContextMenu';
 import { WorkflowLibraryModal } from 'features/nodes/components/sidePanel/workflow/WorkflowLibrary/WorkflowLibraryModal';
@@ -54,6 +55,7 @@ export const GlobalModalIsolator = memo(() => {
       </CanvasManagerProviderGate>
       <LoadWorkflowFromGraphModal />
       <CropImageModal />
+      <TransparencyFillDialog />
     </>
   );
 });

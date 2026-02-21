@@ -1521,6 +1521,12 @@
         "loading": "Generating Dynamic Prompts...",
         "promptsToGenerate": "Prompts to Generate"
     },
+    "externalApi": {
+        "transparencyDetected": "Transparency Detected",
+        "transparencyMessage": "The canvas contains transparent areas that external APIs cannot process. Choose a background fill color:",
+        "fillWhite": "Fill White",
+        "fillBlack": "Fill Black"
+    },
     "sdxl": {
         "cfgScale": "CFG Scale",
         "concatPromptStyle": "Linking Prompt & Style",

@@ -7,7 +7,9 @@ import { withResult, withResultAsync } from 'common/util/result';
 import { useCanvasManagerSafe } from 'features/controlLayers/contexts/CanvasManagerProviderGate';
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { positivePromptAddedToHistory, selectPositivePrompt } from 'features/controlLayers/store/paramsSlice';
+import { selectCanvasSlice } from 'features/controlLayers/store/selectors';
 import { selectExternalApiIsEnabled } from 'features/externalApi/store/externalApiSlice';
+import { prepareCanvasComposite } from 'features/externalApi/util/prepareCanvasComposite';
 import type { BaseModelType } from 'features/nodes/types/common';
 import { prepareLinearUIBatch } from 'features/nodes/util/graph/buildLinearBatchConfig';
 import { buildCogView4Graph } from 'features/nodes/util/graph/generation/buildCogView4Graph';
@@ -19,7 +21,7 @@ import { buildSDXLGraph } from 'features/nodes/util/graph/generation/buildSDXLGr
 import { buildZImageGraph } from 'features/nodes/util/graph/generation/buildZImageGraph';
 import { selectCanvasDestination } from 'features/nodes/util/graph/graphBuilderUtils';
 import type { GraphBuilderArg } from 'features/nodes/util/graph/types';
-import { UnsupportedGenerationModeError } from 'features/nodes/util/graph/types';
+import { GenerationCancelledError, UnsupportedGenerationModeError } from 'features/nodes/util/graph/types';
 import { toast } from 'features/toast/toast';
 import { useCallback } from 'react';
 import { serializeError } from 'serialize-error';
@@ -51,8 +53,19 @@ const enqueueCanvas = async (store: AppStore, canvasManager: CanvasManager, prep
   }
 
   const buildGraphResult = await withResultAsync(async () => {
-    const generationMode = await canvasManager.compositor.getGenerationMode();
+    // For External API: skip expensive generationMode detection — buildExternalAPIGraph does its own adapter checks
+    const generationMode = isExternalApi ? 'txt2img' : await canvasManager.compositor.getGenerationMode();
     const graphBuilderArg: GraphBuilderArg = { generationMode, state, manager: canvasManager };
+
+    // Pre-process canvas for External API: transparency flatten + 75% downscale
+    if (isExternalApi) {
+      const canvas = selectCanvasSlice(state);
+      const { rect } = canvas.bbox;
+      const preComposited = await prepareCanvasComposite(canvasManager, rect);
+      if (preComposited) {
+        graphBuilderArg.preCompositedCanvas = preComposited;
+      }
+    }
 
     // External API takes priority over local model pipeline
     if (isExternalApi) {
@@ -80,6 +93,10 @@ const enqueueCanvas = async (store: AppStore, canvasManager: CanvasManager, prep
   });
 
   if (buildGraphResult.isErr()) {
+    // Silent abort when user cancels (e.g. transparency fill dialog)
+    if (buildGraphResult.error instanceof GenerationCancelledError) {
+      return;
+    }
     let title = 'Failed to build graph';
     let status: AlertStatus = 'error';
     let description: string | null = null;

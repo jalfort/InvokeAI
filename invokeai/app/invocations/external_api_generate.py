@@ -131,23 +131,20 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
         return pil_images
 
     def _apply_mask_annotation(self, base: Image.Image, mask: Image.Image) -> Image.Image:
-        """Overlay a semi-transparent red highlight on the masked area of the base image.
+        """Replace the masked area with solid red so the model can clearly see what to edit.
 
         Takes a base image (raster composite) and a grayscale mask (white = masked area)
-        and returns a new image with a 50% opacity red overlay where the mask is white.
+        and returns a new image where white mask regions are solid red, rest is original.
         """
-        base_rgba = base.convert("RGBA")
-        mask_l = mask.convert("L").resize(base_rgba.size, Image.LANCZOS)
+        base_rgb = base.convert("RGB")
+        mask_l = mask.convert("L").resize(base_rgb.size, Image.LANCZOS)
 
-        # Create a solid red overlay at 50% opacity
-        red_overlay = Image.new("RGBA", base_rgba.size, (255, 0, 0, 128))
+        # Create solid red image
+        red_solid = Image.new("RGB", base_rgb.size, (255, 0, 0))
 
-        # Use the mask as the alpha channel for the overlay (white=visible, black=transparent)
-        red_overlay.putalpha(mask_l)
-
-        # Composite the red overlay onto the base
-        annotated = Image.alpha_composite(base_rgba, red_overlay)
-        return annotated.convert("RGB")
+        # Composite: where mask is white → solid red, where black → original image
+        annotated = Image.composite(red_solid, base_rgb, mask_l)
+        return annotated
 
     def _build_params(self) -> GenerateParams:
         """Build the common generation parameters."""
@@ -183,7 +180,23 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
             context.util.signal_progress("Applying mask annotation...", percentage=0.08)
             mask_pil = context.images.get_pil(self.mask_image.image_name)
             ref_images[0] = self._apply_mask_annotation(ref_images[0], mask_pil)
-            prompt = f"Edit the area highlighted in red in the image. {prompt}"
+            prompt = (
+                "IMPORTANT: The image contains an area painted in solid red. "
+                "ONLY modify the content inside the red area. "
+                "Keep everything outside the red area exactly the same. "
+                f"{prompt}"
+            )
+
+        # Reference-aware prompt prefix: help model distinguish canvas from reference images
+        # Only when editing with canvas content (first image) + additional user references
+        if self.mode == "edit" and len(ref_images) > 1:
+            num_refs = len(ref_images) - 1
+            prompt = (
+                f"The first image is the main image to edit. "
+                f"The other {num_refs} image(s) are style/character references — "
+                f"use them for visual guidance but preserve the composition of the main image. "
+                f"{prompt}"
+            )
 
         # Progress callback that signals through InvokeAI context
         def progress_cb(message: str, percentage: float) -> None:
@@ -192,7 +205,10 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
         is_edit = self.mode == "edit"
 
         if is_edit and not ref_images:
-            raise ValueError("Edit mode requires at least one source image in reference_images.")
+            # Canvas composite alone is a valid edit source — if somehow nothing was sent,
+            # fall back to generate behavior rather than erroring
+            context.util.signal_progress("No reference images for edit mode, falling back to generate...", percentage=0.1)
+            is_edit = False
 
         # Run the async provider call from this sync invocation context
         results = asyncio.run(

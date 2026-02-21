@@ -30,12 +30,16 @@ export type ExternalApiOutputFormat = z.infer<typeof zExternalApiOutputFormat>;
 const zExternalApiGenerationMode = z.enum(['generate', 'edit']);
 export type ExternalApiGenerationMode = z.infer<typeof zExternalApiGenerationMode>;
 
+const zExternalApiModeSource = z.enum(['user', 'auto']);
+export type ExternalApiModeSource = z.infer<typeof zExternalApiModeSource>;
+
 const zExternalApiState = z.object({
-  _version: z.literal(3),
+  _version: z.literal(4),
   isEnabled: z.boolean(),
   providerId: z.string(),
   modelId: z.string(),
   generationMode: zExternalApiGenerationMode,
+  modeSource: zExternalApiModeSource,
   aspectRatio: zExternalApiAspectRatio,
   resolution: zExternalApiResolution,
   enableWebSearch: z.boolean(),
@@ -47,11 +51,12 @@ const zExternalApiState = z.object({
 export type ExternalApiState = z.infer<typeof zExternalApiState>;
 
 const getInitialState = (): ExternalApiState => ({
-  _version: 3,
+  _version: 4,
   isEnabled: false,
   providerId: 'fal',
   modelId: 'fal-ai/nano-banana-pro',
   generationMode: 'generate',
+  modeSource: 'user',
   aspectRatio: '1:1',
   resolution: '1K',
   enableWebSearch: false,
@@ -76,6 +81,11 @@ const slice = createSlice({
     },
     externalApiGenerationModeChanged: (state, action: PayloadAction<ExternalApiGenerationMode>) => {
       state.generationMode = action.payload;
+      state.modeSource = 'user';
+    },
+    externalApiGenerationModeAutoSet: (state, action: PayloadAction<ExternalApiGenerationMode>) => {
+      state.generationMode = action.payload;
+      state.modeSource = 'auto';
     },
     externalApiAspectRatioChanged: (state, action: PayloadAction<ExternalApiAspectRatio>) => {
       state.aspectRatio = action.payload;
@@ -114,6 +124,7 @@ export const {
   externalApiProviderChanged,
   externalApiModelChanged,
   externalApiGenerationModeChanged,
+  externalApiGenerationModeAutoSet,
   externalApiAspectRatioChanged,
   externalApiResolutionChanged,
   externalApiWebSearchToggled,
@@ -153,6 +164,14 @@ export const externalApiSliceConfig: SliceConfig<typeof slice> = {
         }
       }
 
+      // Migrate v3 -> v4: add modeSource
+      if (state._version === 3) {
+        state._version = 4;
+        if (!('modeSource' in state)) {
+          state.modeSource = 'user';
+        }
+      }
+
       return zExternalApiState.parse(state);
     },
   },
@@ -172,4 +191,5 @@ export const selectExternalApiEnableWebSearch = createExternalApiSelector((s) =>
 export const selectExternalApiSafetyTolerance = createExternalApiSelector((s) => s.safetyTolerance);
 export const selectExternalApiNumImages = createExternalApiSelector((s) => s.numImages);
 export const selectExternalApiOutputFormat = createExternalApiSelector((s) => s.outputFormat);
+export const selectExternalApiModeSource = createExternalApiSelector((s) => s.modeSource);
 export const selectExternalApiReferenceImageNames = createExternalApiSelector((s) => s.referenceImageNames);
