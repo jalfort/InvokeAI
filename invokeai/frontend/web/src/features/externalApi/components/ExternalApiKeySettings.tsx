@@ -38,7 +38,8 @@ const ConfiguredProviderRow = memo(
       setTestResult({ isValid: result.is_valid, message: result.message });
     }, [providerId, testKey]);
 
-    const capabilityLabel = capabilityType === 'image_text' ? 'Image + Text' : capabilityType === 'text' ? 'Text' : 'Image';
+    const capabilityLabel =
+      capabilityType === 'image_text' ? 'Image + Text' : capabilityType === 'text' ? 'Text' : 'Image';
 
     return (
       <Flex flexDir="column" gap={1}>
@@ -112,7 +113,13 @@ const NewKeyRow = memo(
           <FormControl w="200px">
             <Combobox value={selectedValue} options={providerOptions} onChange={onProviderChange(index)} />
           </FormControl>
-          <IconButton aria-label="Remove" icon={<PiTrashSimpleBold />} size="sm" variant="ghost" onClick={handleRemove} />
+          <IconButton
+            aria-label="Remove"
+            icon={<PiTrashSimpleBold />}
+            size="sm"
+            variant="ghost"
+            onClick={handleRemove}
+          />
         </Flex>
         <Flex gap={2}>
           <Input

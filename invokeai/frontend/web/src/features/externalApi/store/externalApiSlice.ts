@@ -31,7 +31,7 @@ const zExternalApiGenerationMode = z.enum(['generate', 'edit']);
 export type ExternalApiGenerationMode = z.infer<typeof zExternalApiGenerationMode>;
 
 const zExternalApiState = z.object({
-  _version: z.literal(2),
+  _version: z.literal(3),
   isEnabled: z.boolean(),
   providerId: z.string(),
   modelId: z.string(),
@@ -42,11 +42,12 @@ const zExternalApiState = z.object({
   safetyTolerance: z.number().int().min(1).max(6),
   numImages: z.number().int().min(1).max(4),
   outputFormat: zExternalApiOutputFormat,
+  referenceImageNames: z.array(z.string()),
 });
 export type ExternalApiState = z.infer<typeof zExternalApiState>;
 
 const getInitialState = (): ExternalApiState => ({
-  _version: 2,
+  _version: 3,
   isEnabled: false,
   providerId: 'fal',
   modelId: 'fal-ai/nano-banana-pro',
@@ -57,6 +58,7 @@ const getInitialState = (): ExternalApiState => ({
   safetyTolerance: 6,
   numImages: 1,
   outputFormat: 'png',
+  referenceImageNames: [],
 });
 
 const slice = createSlice({
@@ -93,6 +95,17 @@ const slice = createSlice({
     externalApiOutputFormatChanged: (state, action: PayloadAction<ExternalApiOutputFormat>) => {
       state.outputFormat = action.payload;
     },
+    externalApiReferenceImageAdded: (state, action: PayloadAction<string>) => {
+      if (!state.referenceImageNames.includes(action.payload)) {
+        state.referenceImageNames.push(action.payload);
+      }
+    },
+    externalApiReferenceImageRemoved: (state, action: PayloadAction<string>) => {
+      state.referenceImageNames = state.referenceImageNames.filter((n) => n !== action.payload);
+    },
+    externalApiReferenceImagesCleared: (state) => {
+      state.referenceImageNames = [];
+    },
   },
 });
 
@@ -107,6 +120,9 @@ export const {
   externalApiSafetyToleranceChanged,
   externalApiNumImagesChanged,
   externalApiOutputFormatChanged,
+  externalApiReferenceImageAdded,
+  externalApiReferenceImageRemoved,
+  externalApiReferenceImagesCleared,
 } = slice.actions;
 
 export const externalApiSliceConfig: SliceConfig<typeof slice> = {
@@ -129,6 +145,14 @@ export const externalApiSliceConfig: SliceConfig<typeof slice> = {
         }
       }
 
+      // Migrate v2 -> v3: add referenceImageNames
+      if (state._version === 2) {
+        state._version = 3;
+        if (!('referenceImageNames' in state)) {
+          state.referenceImageNames = [];
+        }
+      }
+
       return zExternalApiState.parse(state);
     },
   },
@@ -148,3 +172,4 @@ export const selectExternalApiEnableWebSearch = createExternalApiSelector((s) =>
 export const selectExternalApiSafetyTolerance = createExternalApiSelector((s) => s.safetyTolerance);
 export const selectExternalApiNumImages = createExternalApiSelector((s) => s.numImages);
 export const selectExternalApiOutputFormat = createExternalApiSelector((s) => s.outputFormat);
+export const selectExternalApiReferenceImageNames = createExternalApiSelector((s) => s.referenceImageNames);

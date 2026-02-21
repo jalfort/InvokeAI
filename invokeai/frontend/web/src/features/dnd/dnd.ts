@@ -5,6 +5,7 @@ import { getPrefixedId } from 'features/controlLayers/konva/util';
 import { refImageAdded } from 'features/controlLayers/store/refImagesSlice';
 import type { CanvasEntityIdentifier, CanvasEntityType } from 'features/controlLayers/store/types';
 import { imageDTOToCroppableImage } from 'features/controlLayers/store/util';
+import { externalApiReferenceImageAdded } from 'features/externalApi/store/externalApiSlice';
 import { selectComparisonImages } from 'features/gallery/components/ImageViewer/common';
 import type { BoardId } from 'features/gallery/store/types';
 import {
@@ -477,6 +478,27 @@ export const addImageToBoardDndTarget: DndTarget<
 
 //#endregion
 
+//#region Add External API Reference Image
+const _addExternalApiReferenceImage = buildTypeAndKey('add-external-api-reference-image');
+export type AddExternalApiReferenceImageDndTargetData = DndData<
+  typeof _addExternalApiReferenceImage.type,
+  typeof _addExternalApiReferenceImage.key
+>;
+export const addExternalApiReferenceImageDndTarget: DndTarget<
+  AddExternalApiReferenceImageDndTargetData,
+  SingleImageDndSourceData
+> = {
+  ..._addExternalApiReferenceImage,
+  typeGuard: buildTypeGuard(_addExternalApiReferenceImage.key),
+  getData: buildGetData(_addExternalApiReferenceImage.key, _addExternalApiReferenceImage.type),
+  isValid: ({ sourceData }) => singleImageDndSource.typeGuard(sourceData),
+  handler: ({ sourceData, dispatch }) => {
+    const { imageDTO } = sourceData.payload;
+    dispatch(externalApiReferenceImageAdded(imageDTO.image_name));
+  },
+};
+//#endregion
+
 //#region Remove From Board
 const _removeFromBoard = buildTypeAndKey('remove-from-board');
 export type RemoveImageFromBoardDndTargetData = DndData<
@@ -530,6 +552,7 @@ export const dndTargets = [
   newCanvasEntityFromImageDndTarget,
   newCanvasFromImageDndTarget,
   replaceCanvasEntityObjectsWithImageDndTarget,
+  addExternalApiReferenceImageDndTarget,
   addImageToBoardDndTarget,
   removeImageFromBoardDndTarget,
 ] as const;

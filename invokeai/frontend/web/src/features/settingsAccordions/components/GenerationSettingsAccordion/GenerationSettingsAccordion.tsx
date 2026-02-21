@@ -126,7 +126,9 @@ export const GenerationSettingsAccordion = memo(() => {
                   {isFLUX && <ParamFluxScheduler />}
                   {isZImage && <ParamZImageScheduler />}
                   <ParamSteps />
-                  {(isFLUX || isFlux2) && modelConfig && !isFluxFillMainModelModelConfig(modelConfig) && <ParamGuidance />}
+                  {(isFLUX || isFlux2) && modelConfig && !isFluxFillMainModelModelConfig(modelConfig) && (
+                    <ParamGuidance />
+                  )}
                   {!isFLUX && !isFlux2 && <ParamCFGScale />}
                   {isFLUX && <ParamFluxDypePreset />}
                   {isFLUX && fluxDypePreset === 'manual' && <ParamFluxDypeScale />}

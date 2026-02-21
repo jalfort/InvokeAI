@@ -1,6 +1,5 @@
 import { logger } from 'app/logging/logger';
 import { getPrefixedId } from 'features/controlLayers/konva/util';
-import { selectReferenceImageEntities } from 'features/controlLayers/store/refImagesSlice';
 import { selectCanvasSlice } from 'features/controlLayers/store/selectors';
 import { selectExternalApiSlice } from 'features/externalApi/store/externalApiSlice';
 import { Graph } from 'features/nodes/util/graph/generation/Graph';
@@ -32,21 +31,10 @@ export const buildExternalAPIGraph = async (arg: GraphBuilderArg): Promise<Graph
     type: 'integer',
   });
 
-  // Collect reference image names from the ref image entities
-  const referenceImageFields: { image_name: string }[] = [];
-  const refEntities = selectReferenceImageEntities(state);
-  for (const entity of refEntities) {
-    if (!entity.isEnabled) {
-      continue;
-    }
-    const config = entity.config;
-    const image = config.image;
-    if (image) {
-      // CroppableImageWithDims: use cropped image if available, otherwise original
-      const imageName = image.crop?.image?.image_name ?? image.original.image.image_name;
-      referenceImageFields.push({ image_name: imageName });
-    }
-  }
+  // Collect reference images from the external API slice
+  const referenceImageFields: { image_name: string }[] = externalApi.referenceImageNames.map((name) => ({
+    image_name: name,
+  }));
 
   // For edit/inpaint mode on canvas: composite the raster layers and prepend as first reference image
   let maskImageField: { image_name: string } | undefined;

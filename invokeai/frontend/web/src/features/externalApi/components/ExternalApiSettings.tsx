@@ -1,6 +1,16 @@
 import type { ComboboxOnChange, ComboboxOption } from '@invoke-ai/ui-library';
-import { Badge, Combobox, CompositeNumberInput, Flex, FormControl, FormLabel, Switch, Text } from '@invoke-ai/ui-library';
+import {
+  Badge,
+  Combobox,
+  CompositeNumberInput,
+  Flex,
+  FormControl,
+  FormLabel,
+  Switch,
+  Text,
+} from '@invoke-ai/ui-library';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
+import { ExternalApiReferenceImages } from 'features/externalApi/components/ExternalApiReferenceImages';
 import type {
   ExternalApiAspectRatio,
   ExternalApiGenerationMode,
@@ -27,10 +37,7 @@ import {
 } from 'features/externalApi/store/externalApiSlice';
 import type { ChangeEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
-import {
-  useGetExternalApiModelsQuery,
-  useGetExternalApiProvidersQuery,
-} from 'services/api/endpoints/externalApi';
+import { useGetExternalApiModelsQuery, useGetExternalApiProvidersQuery } from 'services/api/endpoints/externalApi';
 
 const MODE_OPTIONS: ComboboxOption[] = [
   { value: 'generate', label: 'Generate' },
@@ -114,18 +121,14 @@ export const ExternalApiSettings = memo(() => {
       : modelsData.models.filter((m) => m.id === modelId);
 
     const providerIds = new Set(matchingModels.map((m) => m.provider_id));
-    const configuredProviders = new Set(
-      providersData.providers.filter((p) => p.is_configured).map((p) => p.provider)
-    );
+    const configuredProviders = new Set(providersData.providers.filter((p) => p.is_configured).map((p) => p.provider));
 
     return Array.from(providerIds).map((pid) => {
       const providerInfo = providersData.providers.find((p) => p.provider === pid);
       const isConfigured = configuredProviders.has(pid);
       return {
         value: pid,
-        label: isConfigured
-          ? (providerInfo?.display_name ?? pid)
-          : `${providerInfo?.display_name ?? pid} (no key)`,
+        label: isConfigured ? (providerInfo?.display_name ?? pid) : `${providerInfo?.display_name ?? pid} (no key)`,
       };
     });
   }, [modelsData, providersData, modelId]);
@@ -295,6 +298,8 @@ export const ExternalApiSettings = memo(() => {
         <FormLabel>Mode</FormLabel>
         <Combobox value={modeValue} options={MODE_OPTIONS} onChange={onModeChange} />
       </FormControl>
+
+      <ExternalApiReferenceImages />
 
       <FormControl>
         <FormLabel>Aspect Ratio</FormLabel>
