@@ -250,6 +250,9 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
         case 'gradient':
           this.manager.stateApi.addGradient({ entityIdentifier, gradient: this.state });
           break;
+        case 'image':
+          this.manager.stateApi.addImage({ entityIdentifier, imageObject: this.state });
+          break;
       }
     }
 

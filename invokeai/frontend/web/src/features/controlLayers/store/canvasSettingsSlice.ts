@@ -2,7 +2,7 @@ import type { PayloadAction, Selector } from '@reduxjs/toolkit';
 import { createSelector, createSlice } from '@reduxjs/toolkit';
 import type { RootState } from 'app/store/store';
 import type { SliceConfig } from 'app/store/types';
-import type { RgbaColor } from 'features/controlLayers/store/types';
+import type { RgbaColor, RgbColor } from 'features/controlLayers/store/types';
 import { RGBA_BLACK, RGBA_WHITE, zRgbaColor } from 'features/controlLayers/store/types';
 import { z } from 'zod';
 
@@ -13,6 +13,12 @@ const zTransformSmoothingMode = z.enum(['bilinear', 'bicubic', 'hamming', 'lancz
 export type TransformSmoothingMode = z.infer<typeof zTransformSmoothingMode>;
 
 const zGradientType = z.enum(['linear', 'radial']);
+
+const zSelectionMode = z.enum(['rectangle', 'ellipse', 'lasso']);
+export type SelectionMode = z.infer<typeof zSelectionMode>;
+
+const zSelectionFeatherDirection = z.enum(['both', 'inward', 'outward']);
+export type SelectionFeatherDirection = z.infer<typeof zSelectionFeatherDirection>;
 
 const zCanvasSettingsState = z.object({
   /**
@@ -118,6 +124,32 @@ const zCanvasSettingsState = z.object({
    * Whether the gradient tool clips to the drag gesture.
    */
   gradientClipEnabled: z.boolean().default(true),
+  /**
+   * The selection tool shape mode.
+   */
+  selectionMode: zSelectionMode.default('rectangle'),
+  /**
+   * The feather radius for selection operations (0-100px).
+   */
+  selectionFeatherRadius: z.number().min(0).max(100).default(0),
+  /**
+   * The feather direction for selection operations.
+   */
+  selectionFeatherDirection: zSelectionFeatherDirection.default('both'),
+  /**
+   * The opacity of the selection overlay (0-1).
+   */
+  selectionOverlayOpacity: z.number().min(0).max(1).default(0.5),
+  /**
+   * The color of the selection overlay.
+   */
+  selectionOverlayColor: z
+    .object({
+      r: z.number().int().min(0).max(255),
+      g: z.number().int().min(0).max(255),
+      b: z.number().int().min(0).max(255),
+    })
+    .default({ r: 160, g: 32, b: 240 }),
 });
 
 type CanvasSettingsState = z.infer<typeof zCanvasSettingsState>;
@@ -148,6 +180,11 @@ const getInitialState = (): CanvasSettingsState => ({
   transformSmoothingMode: 'bicubic',
   gradientType: 'linear',
   gradientClipEnabled: true,
+  selectionMode: 'rectangle',
+  selectionFeatherRadius: 0,
+  selectionFeatherDirection: 'both',
+  selectionOverlayOpacity: 0.5,
+  selectionOverlayColor: { r: 160, g: 32, b: 240 },
 });
 
 const slice = createSlice({
@@ -245,6 +282,30 @@ const slice = createSlice({
     settingsGradientClipToggled: (state) => {
       state.gradientClipEnabled = !state.gradientClipEnabled;
     },
+    settingsSelectionModeChanged: (state, action: PayloadAction<CanvasSettingsState['selectionMode']>) => {
+      state.selectionMode = action.payload;
+    },
+    settingsSelectionFeatherRadiusChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['selectionFeatherRadius']>
+    ) => {
+      state.selectionFeatherRadius = action.payload;
+    },
+    settingsSelectionFeatherDirectionChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['selectionFeatherDirection']>
+    ) => {
+      state.selectionFeatherDirection = action.payload;
+    },
+    settingsSelectionOverlayOpacityChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['selectionOverlayOpacity']>
+    ) => {
+      state.selectionOverlayOpacity = action.payload;
+    },
+    settingsSelectionOverlayColorChanged: (state, action: PayloadAction<RgbColor>) => {
+      state.selectionOverlayColor = action.payload;
+    },
   },
 });
 
@@ -276,6 +337,11 @@ export const {
   settingsFillColorPickerPinnedSet,
   settingsGradientTypeChanged,
   settingsGradientClipToggled,
+  settingsSelectionModeChanged,
+  settingsSelectionFeatherRadiusChanged,
+  settingsSelectionFeatherDirectionChanged,
+  settingsSelectionOverlayOpacityChanged,
+  settingsSelectionOverlayColorChanged,
 } = slice.actions;
 
 export const canvasSettingsSliceConfig: SliceConfig<typeof slice> = {
@@ -317,3 +383,12 @@ export const selectTransformSmoothingEnabled = createCanvasSettingsSelector(
 export const selectTransformSmoothingMode = createCanvasSettingsSelector((settings) => settings.transformSmoothingMode);
 export const selectGradientType = createCanvasSettingsSelector((settings) => settings.gradientType);
 export const selectGradientClipEnabled = createCanvasSettingsSelector((settings) => settings.gradientClipEnabled);
+export const selectSelectionMode = createCanvasSettingsSelector((settings) => settings.selectionMode);
+export const selectSelectionFeatherRadius = createCanvasSettingsSelector((settings) => settings.selectionFeatherRadius);
+export const selectSelectionFeatherDirection = createCanvasSettingsSelector(
+  (settings) => settings.selectionFeatherDirection
+);
+export const selectSelectionOverlayOpacity = createCanvasSettingsSelector(
+  (settings) => settings.selectionOverlayOpacity
+);
+export const selectSelectionOverlayColor = createCanvasSettingsSelector((settings) => settings.selectionOverlayColor);

@@ -9,6 +9,7 @@ import { CanvasAlertsTextSessionActive } from 'features/controlLayers/components
 import { CanvasBusySpinner } from 'features/controlLayers/components/CanvasBusySpinner';
 import { CanvasContextMenuGlobalMenuItems } from 'features/controlLayers/components/CanvasContextMenu/CanvasContextMenuGlobalMenuItems';
 import { CanvasContextMenuSelectedEntityMenuItems } from 'features/controlLayers/components/CanvasContextMenu/CanvasContextMenuSelectedEntityMenuItems';
+import { CanvasContextMenuSelectionItems } from 'features/controlLayers/components/CanvasContextMenu/CanvasContextMenuSelectionItems';
 import { CanvasDropArea } from 'features/controlLayers/components/CanvasDropArea';
 import { Filter } from 'features/controlLayers/components/Filters/Filter';
 import { CanvasHUD } from 'features/controlLayers/components/HUD/CanvasHUD';
@@ -32,6 +33,7 @@ const MenuContent = memo(() => {
     <CanvasManagerProviderGate>
       <MenuList>
         <CanvasContextMenuSelectedEntityMenuItems />
+        <CanvasContextMenuSelectionItems />
         <CanvasContextMenuGlobalMenuItems />
       </MenuList>
     </CanvasManagerProviderGate>

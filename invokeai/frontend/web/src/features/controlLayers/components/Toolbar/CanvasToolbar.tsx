@@ -6,6 +6,7 @@ import { ToolFillColorPicker } from 'features/controlLayers/components/Tool/Tool
 import { ToolGradientClipToggle } from 'features/controlLayers/components/Tool/ToolGradientClipToggle';
 import { ToolGradientModeToggle } from 'features/controlLayers/components/Tool/ToolGradientModeToggle';
 import { ToolOptionsRowContainer } from 'features/controlLayers/components/Tool/ToolOptionsRowContainer';
+import { ToolSelectionSettings } from 'features/controlLayers/components/Tool/ToolSelectionSettings';
 import { ToolWidthPicker } from 'features/controlLayers/components/Tool/ToolWidthPicker';
 import { CanvasToolbarFitBboxToLayersButton } from 'features/controlLayers/components/Toolbar/CanvasToolbarFitBboxToLayersButton';
 import { CanvasToolbarFitBboxToMasksButton } from 'features/controlLayers/components/Toolbar/CanvasToolbarFitBboxToMasksButton';
@@ -32,6 +33,7 @@ export const CanvasToolbar = memo(() => {
   const isEraserSelected = useToolIsSelected('eraser');
   const isTextSelected = useToolIsSelected('text');
   const isGradientSelected = useToolIsSelected('gradient');
+  const isSelectionSelected = useToolIsSelected('selection');
   const showToolWithPicker = useMemo(() => {
     return !isTextSelected && (isBrushSelected || isEraserSelected);
   }, [isBrushSelected, isEraserSelected, isTextSelected]);
@@ -58,6 +60,7 @@ export const CanvasToolbar = memo(() => {
           </Box>
         )}
         {isTextSelected ? <TextToolOptions /> : showToolWithPicker && <ToolWidthPicker />}
+        {isSelectionSelected && <ToolSelectionSettings />}
       </ToolOptionsRowContainer>
       <Flex alignItems="center" h="full">
         <CanvasToolbarScale />

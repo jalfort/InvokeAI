@@ -7,6 +7,7 @@ import { CanvasEraserToolModule } from 'features/controlLayers/konva/CanvasTool/
 import { CanvasGradientToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasGradientToolModule';
 import { CanvasMoveToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasMoveToolModule';
 import { CanvasRectToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasRectToolModule';
+import { CanvasSelectionToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasSelectionToolModule';
 import { CanvasTextToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasTextToolModule';
 import { CanvasViewToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasViewToolModule';
 import {
@@ -63,6 +64,7 @@ export class CanvasToolModule extends CanvasModuleBase {
     eraser: CanvasEraserToolModule;
     rect: CanvasRectToolModule;
     gradient: CanvasGradientToolModule;
+    selection: CanvasSelectionToolModule;
     colorPicker: CanvasColorPickerToolModule;
     bbox: CanvasBboxToolModule;
     view: CanvasViewToolModule;
@@ -122,6 +124,7 @@ export class CanvasToolModule extends CanvasModuleBase {
       eraser: new CanvasEraserToolModule(this),
       rect: new CanvasRectToolModule(this),
       gradient: new CanvasGradientToolModule(this),
+      selection: new CanvasSelectionToolModule(this),
       colorPicker: new CanvasColorPickerToolModule(this),
       bbox: new CanvasBboxToolModule(this),
       text: new CanvasTextToolModule(this),
@@ -139,16 +142,21 @@ export class CanvasToolModule extends CanvasModuleBase {
     this.konva.group.add(this.tools.colorPicker.konva.group);
     this.konva.group.add(this.tools.text.konva.group);
     this.konva.group.add(this.tools.bbox.konva.group);
+    this.konva.group.add(this.tools.selection.konva.group);
 
     this.subscriptions.add(this.manager.stage.$stageAttrs.listen(this.render));
     this.subscriptions.add(this.manager.$isBusy.listen(this.render));
     this.subscriptions.add(this.manager.stateApi.createStoreSubscription(selectCanvasSettingsSlice, this.render));
     this.subscriptions.add(this.manager.stateApi.createStoreSubscription(selectCanvasSlice, this.render));
     this.subscriptions.add(
-      this.$tool.listen(() => {
+      this.$tool.listen((newTool, oldTool) => {
         // On tool switch, reset mouse state
         this.manager.tool.$isPrimaryPointerDown.set(false);
         void this.tools.text.onToolChanged();
+        // Clear selection when switching away from selection tool
+        if (oldTool === 'selection' && newTool !== 'selection') {
+          this.tools.selection.clearSelection();
+        }
         this.render();
       })
     );
@@ -206,7 +214,12 @@ export class CanvasToolModule extends CanvasModuleBase {
         this.tools.rect.syncCursorStyle();
       } else if (tool === 'gradient') {
         this.tools.gradient.syncCursorStyle();
+      } else if (tool === 'selection') {
+        this.tools.selection.syncCursorStyle();
       }
+    } else if (tool === 'selection') {
+      // Selection tool always shows crosshair regardless of entity state
+      this.tools.selection.syncCursorStyle();
     } else if (this.manager.stateApi.getRenderedEntityCount() === 0) {
       stage.setCursor('not-allowed');
     } else {
@@ -222,6 +235,7 @@ export class CanvasToolModule extends CanvasModuleBase {
     this.tools.colorPicker.render();
     this.tools.text.render();
     this.tools.bbox.render();
+    this.tools.selection.render();
   };
 
   syncCursorPositions = () => {
@@ -391,6 +405,16 @@ export class CanvasToolModule extends CanvasModuleBase {
     try {
       this.$lastPointerType.set(e.evt.pointerType);
 
+      const tool = this.$tool.get();
+
+      // Selection tool works as an ephemeral overlay and doesn't require getCanDraw()
+      if (tool === 'selection') {
+        this.$isPrimaryPointerDown.set(getIsPrimaryMouseDown(e));
+        this.syncCursorPositions();
+        await this.tools.selection.onStagePointerDown(e);
+        return;
+      }
+
       if (!this.getCanDraw()) {
         return;
       }
@@ -398,8 +422,6 @@ export class CanvasToolModule extends CanvasModuleBase {
       this.$isPrimaryPointerDown.set(getIsPrimaryMouseDown(e));
 
       this.syncCursorPositions();
-
-      const tool = this.$tool.get();
 
       if (tool === 'brush') {
         await this.tools.brush.onStagePointerDown(e);
@@ -429,6 +451,12 @@ export class CanvasToolModule extends CanvasModuleBase {
 
       if (tool === 'colorPicker') {
         this.tools.colorPicker.onStagePointerUp(e);
+      }
+
+      // Selection tool works as an ephemeral overlay and doesn't require getCanDraw()
+      if (tool === 'selection') {
+        this.tools.selection.onStagePointerUp(e);
+        return;
       }
 
       if (!this.getCanDraw()) {
@@ -464,6 +492,12 @@ export class CanvasToolModule extends CanvasModuleBase {
         this.tools.colorPicker.onStagePointerMove(e);
       } else if (tool === 'text') {
         this.tools.text.onStagePointerMove(e);
+      }
+
+      // Selection tool works as an ephemeral overlay and doesn't require getCanDraw()
+      if (tool === 'selection') {
+        await this.tools.selection.onStagePointerMove(e);
+        return;
       }
 
       if (!this.getCanDraw()) {
@@ -623,6 +657,10 @@ export class CanvasToolModule extends CanvasModuleBase {
     }
 
     if (e.key === KEY_ALT) {
+      // Don't switch to color picker when selection tool is active (Alt used for subtract)
+      if (this.$tool.get() === 'selection') {
+        return;
+      }
       // Select the color picker on alt key down
       e.preventDefault();
       this.$toolBuffer.set(this.$tool.get());
@@ -653,6 +691,10 @@ export class CanvasToolModule extends CanvasModuleBase {
     }
 
     if (e.key === KEY_ALT) {
+      // Don't revert if selection tool is active (Alt used for subtract)
+      if (this.$tool.get() === 'selection') {
+        return;
+      }
       // Revert the tool to the previous tool on alt key up
       e.preventDefault();
       this.revertToolBuffer();
@@ -685,6 +727,7 @@ export class CanvasToolModule extends CanvasModuleBase {
         colorPicker: this.tools.colorPicker.repr(),
         rect: this.tools.rect.repr(),
         gradient: this.tools.gradient.repr(),
+        selection: this.tools.selection.repr(),
         bbox: this.tools.bbox.repr(),
         view: this.tools.view.repr(),
         move: this.tools.move.repr(),

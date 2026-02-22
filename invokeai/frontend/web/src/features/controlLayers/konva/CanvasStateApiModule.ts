@@ -21,6 +21,7 @@ import {
   entityBrushLineAdded,
   entityEraserLineAdded,
   entityGradientAdded,
+  entityImageAdded,
   entityMovedBy,
   entityMovedTo,
   entityRasterized,
@@ -43,6 +44,7 @@ import type {
   EntityEraserLineAddedPayload,
   EntityGradientAddedPayload,
   EntityIdentifierPayload,
+  EntityImageAddedPayload,
   EntityMovedByPayload,
   EntityMovedToPayload,
   EntityRasterizedPayload,
@@ -180,6 +182,13 @@ export class CanvasStateApiModule extends CanvasModuleBase {
    */
   addGradient = (arg: EntityGradientAddedPayload) => {
     this.store.dispatch(entityGradientAdded(arg));
+  };
+
+  /**
+   * Adds an image to an entity, pushing state to redux.
+   */
+  addImage = (arg: EntityImageAddedPayload) => {
+    this.store.dispatch(entityImageAdded(arg));
   };
 
   /**

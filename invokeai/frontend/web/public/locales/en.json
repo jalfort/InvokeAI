@@ -622,6 +622,10 @@
                 "title": "View Tool",
                 "desc": "Select the view tool."
             },
+            "selectSelectionTool": {
+                "title": "Selection Tool",
+                "desc": "Select the selection tool."
+            },
             "fitLayersToCanvas": {
                 "title": "Fit Layers to Canvas",
                 "desc": "Scale and position the view to fit all visible layers."
@@ -2585,7 +2589,8 @@
             "move": "Move",
             "view": "View",
             "colorPicker": "Color Picker",
-            "text": "Text"
+            "text": "Text",
+            "selection": "Selection"
         },
         "text": {
             "font": "Font",
@@ -2598,6 +2603,22 @@
             "alignCenter": "Align Center",
             "alignRight": "Align Right",
             "px": "px"
+        },
+        "selection": {
+            "rectangle": "Rectangle",
+            "ellipse": "Ellipse",
+            "lasso": "Lasso",
+            "selectionGroup": "Selection",
+            "fill": "Fill with Color",
+            "delete": "Delete",
+            "invert": "Invert Selection",
+            "feather": "Feather...",
+            "deselect": "Deselect",
+            "featherRadius": "Feather",
+            "featherDirection": "Direction",
+            "featherBoth": "Both",
+            "featherInward": "Inward",
+            "featherOutward": "Outward"
         },
         "filter": {
             "filter": "Filter",

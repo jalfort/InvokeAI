@@ -120,6 +120,7 @@ export const useHotkeyData = (): HotkeysData => {
     addHotkey('canvas', 'selectRectTool', ['u']);
     addHotkey('canvas', 'selectViewTool', ['h']);
     addHotkey('canvas', 'selectColorPickerTool', ['i']);
+    addHotkey('canvas', 'selectSelectionTool', ['s']);
     addHotkey('canvas', 'setFillColorsToDefault', ['d']);
     addHotkey('canvas', 'toggleFillColor', ['x']);
     addHotkey('canvas', 'fitLayersToCanvas', ['mod+0']);

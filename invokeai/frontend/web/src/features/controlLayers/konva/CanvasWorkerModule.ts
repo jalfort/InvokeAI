@@ -1,8 +1,18 @@
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
 import { getPrefixedId } from 'features/controlLayers/konva/util';
-import type { Extents, ExtentsResult, GetBboxTask, WorkerLogMessage } from 'features/controlLayers/konva/worker';
+import type {
+  ComputeSdtTask,
+  Extents,
+  ExtentsResult,
+  GetBboxTask,
+  SdtResult,
+  WorkerLogMessage,
+} from 'features/controlLayers/konva/worker';
 import type { Logger } from 'roarr';
+
+type BboxTaskEntry = { task: GetBboxTask; onComplete: (extents: Extents | null) => void };
+type SdtTaskEntry = { task: ComputeSdtTask; onComplete: (sdt: Float32Array, width: number, height: number) => void };
 
 export class CanvasWorkerModule extends CanvasModuleBase {
   readonly type = 'worker';
@@ -13,7 +23,8 @@ export class CanvasWorkerModule extends CanvasModuleBase {
   readonly manager: CanvasManager;
 
   worker: Worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module', name: 'worker' });
-  tasks: Map<string, { task: GetBboxTask; onComplete: (extents: Extents | null) => void }> = new Map();
+  bboxTasks: Map<string, BboxTaskEntry> = new Map();
+  sdtTasks: Map<string, SdtTaskEntry> = new Map();
 
   constructor(manager: CanvasManager) {
     super();
@@ -25,7 +36,7 @@ export class CanvasWorkerModule extends CanvasModuleBase {
 
     this.log.debug('Creating module');
 
-    this.worker.onmessage = (event: MessageEvent<ExtentsResult | WorkerLogMessage>) => {
+    this.worker.onmessage = (event: MessageEvent<ExtentsResult | SdtResult | WorkerLogMessage>) => {
       const { type, data } = event.data;
       if (type === 'log') {
         if (data.ctx) {
@@ -34,12 +45,19 @@ export class CanvasWorkerModule extends CanvasModuleBase {
           this.log[data.level](data.message);
         }
       } else if (type === 'extents') {
-        const task = this.tasks.get(data.id);
+        const task = this.bboxTasks.get(data.id);
         if (!task) {
           return;
         }
         task.onComplete(data.extents);
-        this.tasks.delete(data.id);
+        this.bboxTasks.delete(data.id);
+      } else if (type === 'sdt') {
+        const task = this.sdtTasks.get(data.id);
+        if (!task) {
+          return;
+        }
+        task.onComplete(new Float32Array(data.sdt), data.width, data.height);
+        this.sdtTasks.delete(data.id);
       }
     };
     this.worker.onerror = (event) => {
@@ -56,7 +74,20 @@ export class CanvasWorkerModule extends CanvasModuleBase {
       type: 'get_bbox',
       data: { ...data, id },
     };
-    this.tasks.set(id, { task, onComplete });
+    this.bboxTasks.set(id, { task, onComplete });
+    this.worker.postMessage(task, [data.buffer]);
+  }
+
+  requestSdt(
+    data: Omit<ComputeSdtTask['data'], 'id'>,
+    onComplete: (sdt: Float32Array, width: number, height: number) => void
+  ) {
+    const id = getPrefixedId('sdt_calculation');
+    const task: ComputeSdtTask = {
+      type: 'compute_sdt',
+      data: { ...data, id },
+    };
+    this.sdtTasks.set(id, { task, onComplete });
     this.worker.postMessage(task, [data.buffer]);
   }
 
@@ -65,13 +96,14 @@ export class CanvasWorkerModule extends CanvasModuleBase {
       id: this.id,
       type: this.type,
       path: this.path,
-      tasks: Array.from(this.tasks.keys()),
+      tasks: [...Array.from(this.bboxTasks.keys()), ...Array.from(this.sdtTasks.keys())],
     };
   };
 
   destroy = () => {
     this.log.trace('Destroying worker module');
     this.worker.terminate();
-    this.tasks.clear();
+    this.bboxTasks.clear();
+    this.sdtTasks.clear();
   };
 }

@@ -66,6 +66,7 @@ import type {
   EntityEraserLineAddedPayload,
   EntityGradientAddedPayload,
   EntityIdentifierPayload,
+  EntityImageAddedPayload,
   EntityMovedToPayload,
   EntityRasterizedPayload,
   EntityRectAddedPayload,
@@ -1559,6 +1560,15 @@ const slice = createSlice({
       // re-render it (reference equality check). I don't like this behaviour.
       entity.objects.push({ ...gradient });
     },
+    entityImageAdded: (state, action: PayloadAction<EntityImageAddedPayload>) => {
+      const { entityIdentifier, imageObject } = action.payload;
+      const entity = selectEntity(state, entityIdentifier);
+      if (!entity) {
+        return;
+      }
+
+      entity.objects.push({ ...imageObject });
+    },
     entityDeleted: (state, action: PayloadAction<EntityIdentifierPayload>) => {
       const { entityIdentifier } = action.payload;
 
@@ -1788,6 +1798,7 @@ export const {
   entityEraserLineAdded,
   entityRectAdded,
   entityGradientAdded,
+  entityImageAdded,
   // Raster layer adjustments
   rasterLayerAdjustmentsSet,
   rasterLayerAdjustmentsCancel,
