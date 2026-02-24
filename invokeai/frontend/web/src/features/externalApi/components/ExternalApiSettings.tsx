@@ -170,7 +170,10 @@ export const ExternalApiSettings = memo(() => {
     () => providerOptions.find((o) => o.value === providerId) ?? null,
     [providerOptions, providerId]
   );
-  const modeValue = useMemo(() => modeOptions.find((o) => o.value === generationMode) ?? null, [modeOptions, generationMode]);
+  const modeValue = useMemo(
+    () => modeOptions.find((o) => o.value === generationMode) ?? null,
+    [modeOptions, generationMode]
+  );
   const aspectRatioValue = useMemo(
     () => ASPECT_RATIO_OPTIONS.find((o) => o.value === aspectRatio) ?? null,
     [aspectRatio]

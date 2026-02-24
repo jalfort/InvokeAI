@@ -14,6 +14,7 @@ import {
   settingsBrushWidthChanged,
   settingsEraserWidthChanged,
   settingsFgColorChanged,
+  settingsSelectionFeatherRadiusChanged,
 } from 'features/controlLayers/store/canvasSettingsSlice';
 import {
   bboxChangedFromCanvas,
@@ -291,6 +292,13 @@ export class CanvasStateApiModule extends CanvasModuleBase {
    */
   setEraserWidth = (width: number) => {
     this.store.dispatch(settingsEraserWidthChanged(width));
+  };
+
+  /**
+   * Sets the selection feather radius, pushing state to redux.
+   */
+  setSelectionFeatherRadius = (radius: number) => {
+    this.store.dispatch(settingsSelectionFeatherRadiusChanged(radius));
   };
 
   /**

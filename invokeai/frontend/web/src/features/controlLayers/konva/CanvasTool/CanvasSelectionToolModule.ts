@@ -2,15 +2,34 @@ import { rgbaColorToString } from 'common/util/colorCodeTransformers';
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
 import type { CanvasToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasToolModule';
+import { getPatternSVG } from 'features/controlLayers/konva/patterns/getPatternSVG';
 import { canvasToBlob, getPrefixedId, loadImage } from 'features/controlLayers/konva/util';
 import type { SelectionFeatherDirection, SelectionMode } from 'features/controlLayers/store/canvasSettingsSlice';
-import type { Coordinate, Rect, RgbaColor } from 'features/controlLayers/store/types';
+import type { Coordinate, Rect, RgbaColor, RgbColor } from 'features/controlLayers/store/types';
 import { imageDTOToImageObject } from 'features/controlLayers/store/util';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { atom } from 'nanostores';
 import type { Logger } from 'roarr';
 import { uploadImage } from 'services/api/endpoints/images';
+
+/**
+ * A single sub-selection entry in the stack. Each draw operation creates one.
+ * Feathering settings are captured at draw time and stored per-entry.
+ */
+interface SubSelection {
+  binaryMask: HTMLCanvasElement;
+  featherRadius: number;
+  featherDirection: SelectionFeatherDirection;
+  combineMode: 'replace' | 'add' | 'subtract';
+  featheredMask: HTMLCanvasElement | null; // null = use binaryMask (feather=0)
+  cachedSdt: Float32Array | null;
+  cachedSdtWidth: number;
+  cachedSdtHeight: number;
+  selectionMode: SelectionMode; // for marching ants shape
+  lassoPoints: number[] | null; // for lasso/polygon marching ants
+  bounds: Rect;
+}
 
 /**
  * Configuration constants for the selection tool.
@@ -31,7 +50,7 @@ type CanvasSelectionToolModuleConfig = {
 const DEFAULT_CONFIG: CanvasSelectionToolModuleConfig = {
   DASH_LENGTH: 6,
   GAP_LENGTH: 6,
-  MARCH_SPEED: 0.5,
+  MARCH_SPEED: 0.25,
   MIN_SELECTION_SIZE: 2,
   LINE_WIDTH: 1,
 };
@@ -43,7 +62,10 @@ const DEFAULT_CONFIG: CanvasSelectionToolModuleConfig = {
  * They are ephemeral overlays rendered by this module's own Konva group. Selection operations
  * (fill, delete) produce standard canvas objects clipped to the selection.
  *
- * Supports three shape modes: rectangle, ellipse, and lasso (freehand).
+ * Uses a sub-selection stack architecture where each draw operation is an independent entry
+ * with its own feather settings. The feather slider only affects the most recent entry.
+ *
+ * Supports four shape modes: rectangle, ellipse, lasso (freehand), and polygon (click-to-place).
  */
 export class CanvasSelectionToolModule extends CanvasModuleBase {
   readonly type = 'selection_tool';
@@ -57,9 +79,9 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
 
   // --- Nanostore atoms for ephemeral selection state ---
 
-  /** Binary selection mask (off-screen canvas, alpha channel = selection) */
+  /** Binary selection mask (off-screen canvas, alpha channel = selection) — derived from stack */
   $selectionMask = atom<HTMLCanvasElement | null>(null);
-  /** Feathered version of the selection mask */
+  /** Feathered version of the selection mask — derived from stack */
   $featheredMask = atom<HTMLCanvasElement | null>(null);
   /** Bounding rect of the selection in stage-relative coordinates */
   $selectionBounds = atom<Rect | null>(null);
@@ -71,12 +93,20 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
   $lassoPoints = atom<number[]>([]);
   /** Whether ctrl is held (constrain to square/circle) */
   $ctrlHeld = atom<boolean>(false);
+  /** Whether C is held (draw from center) */
+  $centerHeld = atom<boolean>(false);
   /** Current combine mode based on held modifiers at draw start */
   $combineMode = atom<'replace' | 'add' | 'subtract'>('replace');
-  /** Stashed previous mask for add/subtract compositing */
-  $previousMask = atom<HTMLCanvasElement | null>(null);
-  /** Whether the current selection is a composite (from add/subtract) */
-  $isComposite = atom<boolean>(false);
+  /** Committed polygon vertices [x1, y1, x2, y2, ...] */
+  $polygonVertices = atom<number[]>([]);
+  /** Whether a polygon is in-progress (vertices placed but not closed) */
+  $polygonInProgress = atom<boolean>(false);
+  /** Sub-mode: 'draw' (default) or 'move' (translate selection mask) */
+  $selectionSubMode = atom<'draw' | 'move'>('draw');
+  /** Sub-selection stack — source of truth for all selection state */
+  $subSelections = atom<SubSelection[]>([]);
+  /** Whether S key is held (for S+scroll feather radius) */
+  $sKeyHeld = atom<boolean>(false);
 
   /** Animation frame ID for marching ants */
   private marchingAntsAnimId: number | null = null;
@@ -86,13 +116,33 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
   private _lastFeatherRadius = 0;
   private _lastFeatherDirection: SelectionFeatherDirection = 'both';
   private _lastOverlayOpacity = 0.5;
-  private _lastOverlayColor = { r: 160, g: 32, b: 240 };
-  /** Cached signed distance transform (reused when only radius/direction changes) */
-  private _cachedSdt: Float32Array | null = null;
-  private _cachedSdtWidth = 0;
-  private _cachedSdtHeight = 0;
-  /** The mask identity that the cached SDT was computed from */
-  private _cachedSdtMask: HTMLCanvasElement | null = null;
+  private _lastOverlayColor = { r: 220, g: 40, b: 40 };
+  /** Committed composite cache: binary composite of entries [0..n-2] */
+  private _committedBinaryComposite: HTMLCanvasElement | null = null;
+  /** Committed composite cache: feathered composite of entries [0..n-2] */
+  private _committedFeatheredComposite: HTMLCanvasElement | null = null;
+  /** Number of entries in the committed composite cache */
+  private _committedCompositeCount = 0;
+  /** Timestamp of last pointerDown for polygon double-click detection */
+  private _lastClickTime = 0;
+  /** Position of last pointerDown for polygon double-click detection */
+  private _lastClickPos: Coordinate | null = null;
+  /** Double-click threshold in ms */
+  private static readonly DOUBLE_CLICK_TIME = 300;
+  /** Double-click distance threshold in stage pixels */
+  private static readonly DOUBLE_CLICK_DIST = 5;
+  /** Move sub-mode: start position of the drag */
+  private _moveStartPos: Coordinate | null = null;
+  /** Move sub-mode: original bounds snapshot at drag start */
+  private _moveOriginalBounds: Rect | null = null;
+  /** Move sub-mode: original binary mask snapshot at drag start */
+  private _moveOriginalMask: HTMLCanvasElement | null = null;
+  /** Move sub-mode: original feathered mask snapshot at drag start */
+  private _moveOriginalFeathered: HTMLCanvasElement | null = null;
+  /** Cached diagonal hatching pattern image for overlay */
+  private _patternImage: HTMLImageElement | null = null;
+  /** Last color used for the cached pattern image */
+  private _patternColor: RgbColor | null = null;
   /** Unsubscribe from Redux store */
   private unsubscribeStore: (() => void) | null = null;
 
@@ -145,11 +195,12 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
 
-    // Watch feather and overlay settings changes, re-apply when selection exists
+
+    // Watch feather and overlay settings changes, re-apply to latest stack entry
     this.unsubscribeStore = this.manager.stateApi.store.subscribe(() => {
       const settings = this.manager.stateApi.getSettings();
-      const mask = this.$selectionMask.get();
-      if (!mask) {
+      const stack = this.$subSelections.get();
+      if (stack.length === 0) {
         return;
       }
 
@@ -166,13 +217,7 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       if (featherChanged) {
         this._lastFeatherRadius = settings.selectionFeatherRadius;
         this._lastFeatherDirection = settings.selectionFeatherDirection;
-
-        if (settings.selectionFeatherRadius > 0) {
-          this.applyFeathering(settings.selectionFeatherRadius, settings.selectionFeatherDirection);
-        } else {
-          this.$featheredMask.set(mask);
-          this.updateOverlayPreview();
-        }
+        this.refeatherLatestEntry(settings.selectionFeatherRadius, settings.selectionFeatherDirection);
       } else if (overlayChanged) {
         this._lastOverlayOpacity = settings.selectionOverlayOpacity;
         this._lastOverlayColor = { ...settings.selectionOverlayColor };
@@ -182,18 +227,108 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
   }
 
   syncCursorStyle = () => {
-    this.manager.stage.setCursor('crosshair');
+    if (this.$selectionSubMode.get() === 'move' && this.hasSelection()) {
+      this.manager.stage.setCursor('move');
+    } else {
+      this.manager.stage.setCursor('crosshair');
+    }
   };
 
   // --- Event Handlers ---
 
   onStagePointerDown = (e: KonvaEventObject<PointerEvent>) => {
     const cursorPos = this.parent.$cursorPos.get();
+
     const isPrimaryPointerDown = this.parent.$isPrimaryPointerDown.get();
 
     if (!cursorPos || !isPrimaryPointerDown) {
       return;
     }
+
+    // --- Move sub-mode: start drag to translate the selection mask ---
+    if (this.$selectionSubMode.get() === 'move' && this.hasSelection()) {
+      this._moveStartPos = { ...cursorPos.relative };
+      this._moveOriginalBounds = this.$selectionBounds.get() ? { ...this.$selectionBounds.get()! } : null;
+      // Snapshot masks so we can draw from originals on each move
+      this._moveOriginalMask = this.$selectionMask.get();
+      this._moveOriginalFeathered = this.$featheredMask.get();
+      this.$isDrawing.set(true);
+      return;
+    }
+
+    const settings = this.manager.stateApi.getSettings();
+
+    // --- Polygon mode: click-to-place vertices ---
+    if (settings.selectionMode === 'polygon') {
+      const now = Date.now();
+      const lastPos = this._lastClickPos;
+      const timeDelta = now - this._lastClickTime;
+      const scale = this.manager.stage.getScale();
+
+      // Double-click detection: close polygon
+      if (
+        lastPos &&
+        timeDelta < CanvasSelectionToolModule.DOUBLE_CLICK_TIME &&
+        Math.hypot(cursorPos.relative.x - lastPos.x, cursorPos.relative.y - lastPos.y) <
+          CanvasSelectionToolModule.DOUBLE_CLICK_DIST / scale
+      ) {
+        this.closePolygon();
+        this._lastClickTime = 0;
+        this._lastClickPos = null;
+        return;
+      }
+
+      this._lastClickTime = now;
+      this._lastClickPos = { ...cursorPos.relative };
+
+      // On first vertex: determine combine mode
+      if (!this.$polygonInProgress.get()) {
+        let combineMode: 'replace' | 'add' | 'subtract' = 'replace';
+        if (e.evt.shiftKey && this.hasSelection()) {
+          combineMode = 'add';
+        } else if (e.evt.altKey && this.hasSelection()) {
+          combineMode = 'subtract';
+        }
+        this.$combineMode.set(combineMode);
+
+        if (combineMode !== 'replace') {
+          // Keep overlay visible, stop ants during drawing
+          this.stopMarchingAnts();
+          if (!this.konva.overlay.visible()) {
+            this.updateOverlayPreview();
+          }
+        } else {
+          this.clearSelection();
+        }
+      }
+
+      // Click-on-first-vertex detection: close polygon if clicking near the first point
+      const vertices = this.$polygonVertices.get();
+      if (vertices.length >= 6) {
+        // At least 3 vertices needed to close
+        const firstX = vertices[0]!;
+        const firstY = vertices[1]!;
+        const dist = Math.hypot(cursorPos.relative.x - firstX, cursorPos.relative.y - firstY);
+        // 6px hitbox radius, scaled to canvas zoom
+        if (dist < 6 / scale) {
+          this.closePolygon();
+          this._lastClickTime = 0;
+          this._lastClickPos = null;
+          return;
+        }
+      }
+
+      // Place vertex
+      vertices.push(cursorPos.relative.x, cursorPos.relative.y);
+      this.$polygonVertices.set([...vertices]);
+      this.$polygonInProgress.set(true);
+      this.$isDrawing.set(true);
+      this.konva.preview.visible(true);
+      this.konva.preview.getLayer()?.batchDraw();
+      return;
+    }
+
+    // --- Standard modes: rectangle, ellipse, lasso ---
 
     // Determine combine mode from modifier keys
     let combineMode: 'replace' | 'add' | 'subtract' = 'replace';
@@ -205,22 +340,18 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
     this.$combineMode.set(combineMode);
 
     if (combineMode !== 'replace') {
-      // Stash current raw mask for compositing later
-      this.$previousMask.set(this.$selectionMask.get());
-      // Stop marching ants during drawing but keep overlay visible so user can see existing selection
+      // Keep overlay visible, stop ants during drawing
       this.stopMarchingAnts();
       if (!this.konva.overlay.visible()) {
         this.updateOverlayPreview();
       }
     } else {
-      this.$previousMask.set(null);
       this.clearSelection();
     }
 
     this.$isDrawing.set(true);
     this.$drawOrigin.set(cursorPos.relative);
 
-    const settings = this.manager.stateApi.getSettings();
     if (settings.selectionMode === 'lasso') {
       this.$lassoPoints.set([cursorPos.relative.x, cursorPos.relative.y]);
     }
@@ -238,7 +369,21 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       return;
     }
 
+    // --- Move sub-mode: translate the selection mask ---
+    if (this.$selectionSubMode.get() === 'move' && this._moveStartPos && this._moveOriginalBounds) {
+      const dx = cursorPos.relative.x - this._moveStartPos.x;
+      const dy = cursorPos.relative.y - this._moveStartPos.y;
+      this.translateMasks(dx, dy);
+      return;
+    }
+
     const settings = this.manager.stateApi.getSettings();
+
+    // Polygon: no point accumulation during move, just rubber-band redraw
+    if (settings.selectionMode === 'polygon') {
+      this.konva.preview.getLayer()?.batchDraw();
+      return;
+    }
 
     if (settings.selectionMode === 'lasso') {
       const points = this.$lassoPoints.get();
@@ -255,80 +400,127 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       return;
     }
 
+    // --- Move sub-mode: finalize translation ---
+    if (this.$selectionSubMode.get() === 'move') {
+      this.$isDrawing.set(false);
+
+      // Flatten stack to a single entry with translated masks
+      const mask = this.$selectionMask.get();
+      const feathered = this.$featheredMask.get();
+      const bounds = this.$selectionBounds.get();
+      if (mask && bounds) {
+        const entry: SubSelection = {
+          binaryMask: mask,
+          featherRadius: 0,
+          featherDirection: 'both',
+          combineMode: 'replace',
+          featheredMask: feathered !== mask ? feathered : null,
+          cachedSdt: null,
+          cachedSdtWidth: 0,
+          cachedSdtHeight: 0,
+          selectionMode: 'rectangle',
+          lassoPoints: null,
+          bounds,
+        };
+        this.$subSelections.set([entry]);
+        this._committedBinaryComposite = null;
+        this._committedFeatheredComposite = null;
+        this._committedCompositeCount = 0;
+      }
+
+      this._moveStartPos = null;
+      this._moveOriginalBounds = null;
+      this._moveOriginalMask = null;
+      this._moveOriginalFeathered = null;
+      return;
+    }
+
+    const settings = this.manager.stateApi.getSettings();
+
+    // Polygon mode: no-op on pointer up (vertices placed by click, closed by double-click/Enter)
+    if (settings.selectionMode === 'polygon') {
+      return;
+    }
+
     this.$isDrawing.set(false);
     this.konva.preview.visible(false);
 
     const cursorPos = this.parent.$cursorPos.get();
     const origin = this.$drawOrigin.get();
-    const settings = this.manager.stateApi.getSettings();
-    const combineMode = this.$combineMode.get();
-    const previousMask = this.$previousMask.get();
 
     if (settings.selectionMode === 'lasso') {
       const points = this.$lassoPoints.get();
       if (points.length < 6) {
-        // Need at least 3 points for a polygon - restore previous if add/subtract
-        if (previousMask) {
-          this.restorePreviousMask(previousMask);
+        // Need at least 3 points for a polygon - restore from stack if add/subtract
+        if (this.$combineMode.get() !== 'replace' && this.$subSelections.get().length > 0) {
+          this.recomputeComposite();
         } else {
           this.clearSelection();
         }
         return;
       }
-      this.generateLassoMask(points);
+      const result = this.generateLassoMask(points);
+      if (result) {
+        this.pushSubSelection(result.canvas, result.bounds, this.$combineMode.get(), 'lasso', [...points]);
+      }
     } else if (origin && cursorPos) {
       const rect = this.getSelectionRect(origin, cursorPos.relative, settings.selectionMode === 'rectangle');
       if (
         Math.abs(rect.width) < this.config.MIN_SELECTION_SIZE ||
         Math.abs(rect.height) < this.config.MIN_SELECTION_SIZE
       ) {
-        // Too small - restore previous if add/subtract
-        if (previousMask) {
-          this.restorePreviousMask(previousMask);
+        // Too small - restore from stack if add/subtract
+        if (this.$combineMode.get() !== 'replace' && this.$subSelections.get().length > 0) {
+          this.recomputeComposite();
         } else {
           this.clearSelection();
         }
         return;
       }
-      this.generateShapeMask(rect, settings.selectionMode);
+      const result = this.generateShapeMask(rect, settings.selectionMode);
+      if (result) {
+        this.pushSubSelection(result.canvas, result.bounds, this.$combineMode.get(), settings.selectionMode, null);
+      }
     } else {
       this.clearSelection();
       return;
     }
-
-    // Composite with previous mask if add/subtract
-    if (previousMask && combineMode !== 'replace') {
-      const newMask = this.$selectionMask.get();
-      if (newMask) {
-        const composite = this.compositeMasks(previousMask, newMask, combineMode);
-        this.invalidateSdtCache();
-        this.$selectionMask.set(composite);
-        this.$featheredMask.set(composite);
-        this.$isComposite.set(true);
-        this.updateBoundsFromMask(composite);
-      }
-      this.$previousMask.set(null);
-    }
-
-    // Apply feathering if radius > 0
-    if (settings.selectionFeatherRadius > 0) {
-      this.applyFeathering(settings.selectionFeatherRadius, settings.selectionFeatherDirection);
-    }
-
-    // Always show overlay when selection exists
-    this.updateOverlayPreview();
-
-    // Start marching ants
-    this.startMarchingAnts();
   };
 
-  // --- Shift key tracking ---
+  // --- Key Tracking ---
 
   private onKeyDown = (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+
     if (e.key === 'Control') {
       this.$ctrlHeld.set(true);
       if (this.$isDrawing.get()) {
         this.konva.preview.getLayer()?.batchDraw();
+      }
+    }
+
+    if (e.key === 'c' || e.key === 'C') {
+      this.$centerHeld.set(true);
+      if (this.$isDrawing.get()) {
+        this.konva.preview.getLayer()?.batchDraw();
+      }
+    }
+
+    // S key tracking for S+scroll feather radius
+    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) {
+      this.$sKeyHeld.set(true);
+    }
+
+    // Polygon: Enter to close, Escape to cancel
+    if (this.$polygonInProgress.get()) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.closePolygon();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.cancelPolygon();
       }
     }
   };
@@ -340,15 +532,253 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
         this.konva.preview.getLayer()?.batchDraw();
       }
     }
+
+    if (e.key === 'c' || e.key === 'C') {
+      this.$centerHeld.set(false);
+      if (this.$isDrawing.get()) {
+        this.konva.preview.getLayer()?.batchDraw();
+      }
+    }
+
+    if (e.key === 's' || e.key === 'S') {
+      this.$sKeyHeld.set(false);
+    }
   };
+
+  // --- Sub-Selection Stack Core Methods ---
+
+  /**
+   * Pushes a new sub-selection onto the stack with the current feather settings.
+   * Replace mode clears the stack; add/subtract append to it.
+   */
+  private pushSubSelection(
+    canvas: HTMLCanvasElement,
+    bounds: Rect,
+    combineMode: 'replace' | 'add' | 'subtract',
+    selectionMode: SelectionMode,
+    lassoPoints: number[] | null
+  ): void {
+    const settings = this.manager.stateApi.getSettings();
+
+    const entry: SubSelection = {
+      binaryMask: canvas,
+      featherRadius: settings.selectionFeatherRadius,
+      featherDirection: settings.selectionFeatherDirection,
+      combineMode,
+      featheredMask: null,
+      cachedSdt: null,
+      cachedSdtWidth: 0,
+      cachedSdtHeight: 0,
+      selectionMode,
+      lassoPoints,
+      bounds,
+    };
+
+    if (combineMode === 'replace') {
+      this.$subSelections.set([entry]);
+      this._committedBinaryComposite = null;
+      this._committedFeatheredComposite = null;
+      this._committedCompositeCount = 0;
+    } else {
+      const stack = this.$subSelections.get();
+      this.$subSelections.set([...stack, entry]);
+    }
+
+    if (settings.selectionFeatherRadius > 0) {
+      this.computeEntryFeathering(entry, () => {
+        this.recomputeComposite();
+      });
+    } else {
+      this.recomputeComposite();
+    }
+  }
+
+  /**
+   * Computes feathering for a sub-selection entry via the SDT worker.
+   * Caches the SDT on the entry for instant re-feathering.
+   */
+  private computeEntryFeathering(entry: SubSelection, onComplete: () => void): void {
+    const ctx = entry.binaryMask.getContext('2d');
+    if (!ctx) {
+      onComplete();
+      return;
+    }
+
+    const imageData = ctx.getImageData(0, 0, entry.binaryMask.width, entry.binaryMask.height);
+    const bufferCopy = imageData.data.buffer.slice(0);
+
+    this.manager.worker.requestSdt(
+      { buffer: bufferCopy, width: entry.binaryMask.width, height: entry.binaryMask.height },
+      (sdt, w, h) => {
+        entry.cachedSdt = sdt;
+        entry.cachedSdtWidth = w;
+        entry.cachedSdtHeight = h;
+        // Read current settings (may have changed while worker was computing)
+        const settings = this.manager.stateApi.getSettings();
+        entry.featherRadius = settings.selectionFeatherRadius;
+        entry.featherDirection = settings.selectionFeatherDirection;
+        entry.featheredMask = this.buildFeatheredCanvas(sdt, w, h, entry.featherRadius, entry.featherDirection);
+        onComplete();
+      }
+    );
+  }
+
+  /**
+   * Re-feathers the latest stack entry when the feather slider changes.
+   * Uses cached SDT for instant updates; computes SDT if not yet cached.
+   */
+  private refeatherLatestEntry(radius: number, direction: SelectionFeatherDirection): void {
+    const stack = this.$subSelections.get();
+    if (stack.length === 0) {
+      return;
+    }
+
+    const entry = stack[stack.length - 1]!;
+    entry.featherRadius = radius;
+    entry.featherDirection = direction;
+
+    if (radius === 0) {
+      entry.featheredMask = null;
+      this.recomputeComposite();
+      return;
+    }
+
+    if (entry.cachedSdt) {
+      // Fast path: SDT already cached
+      entry.featheredMask = this.buildFeatheredCanvas(
+        entry.cachedSdt,
+        entry.cachedSdtWidth,
+        entry.cachedSdtHeight,
+        radius,
+        direction
+      );
+      this.recomputeComposite();
+    } else {
+      // Need to compute SDT first
+      this.computeEntryFeathering(entry, () => {
+        this.recomputeComposite();
+      });
+    }
+  }
+
+  /**
+   * Recomputes the composite selection mask from the sub-selection stack.
+   * Uses a committed composite cache so only the latest entry needs recompositing
+   * when the feather slider changes.
+   */
+  private recomputeComposite(): void {
+    const stack = this.$subSelections.get();
+
+    if (stack.length === 0) {
+      this.$selectionMask.set(null);
+      this.$featheredMask.set(null);
+      this.$selectionBounds.set(null);
+      this.stopMarchingAnts();
+      this.konva.overlay.visible(false);
+      return;
+    }
+
+    if (stack.length === 1) {
+      const entry = stack[0]!;
+      this.$selectionMask.set(entry.binaryMask);
+      this.$featheredMask.set(entry.featheredMask ?? entry.binaryMask);
+      this.$selectionBounds.set(entry.bounds);
+      this._committedBinaryComposite = null;
+      this._committedFeatheredComposite = null;
+      this._committedCompositeCount = 0;
+      this.updateOverlayPreview();
+      this.startMarchingAnts();
+      return;
+    }
+
+    // Multiple entries — compose them using committed cache
+    const committedCount = stack.length - 1;
+    if (this._committedCompositeCount !== committedCount || !this._committedBinaryComposite) {
+      // Rebuild committed composite from scratch
+      let binaryComposite = stack[0]!.binaryMask;
+      let featheredComposite: HTMLCanvasElement = stack[0]!.featheredMask ?? stack[0]!.binaryMask;
+
+      for (let i = 1; i < committedCount; i++) {
+        const entry = stack[i]!;
+        const mode = entry.combineMode === 'replace' ? 'add' : entry.combineMode;
+        binaryComposite = this.compositeMasks(binaryComposite, entry.binaryMask, mode);
+        featheredComposite = this.compositeMasks(featheredComposite, entry.featheredMask ?? entry.binaryMask, mode);
+      }
+
+      this._committedBinaryComposite = binaryComposite;
+      this._committedFeatheredComposite = featheredComposite;
+      this._committedCompositeCount = committedCount;
+    }
+
+    // Compose committed cache with latest entry
+    const latest = stack[stack.length - 1]!;
+    const mode = latest.combineMode === 'replace' ? 'add' : latest.combineMode;
+    const finalBinary = this.compositeMasks(this._committedBinaryComposite, latest.binaryMask, mode);
+    const finalFeathered = this.compositeMasks(
+      this._committedFeatheredComposite!,
+      latest.featheredMask ?? latest.binaryMask,
+      mode
+    );
+
+    this.$selectionMask.set(finalBinary);
+    this.$featheredMask.set(finalFeathered);
+    this.updateBoundsFromMask(finalBinary);
+    this.updateOverlayPreview();
+    this.startMarchingAnts();
+  }
+
+  /**
+   * Removes the last sub-selection from the stack. If only one remains,
+   * clears the selection entirely.
+   */
+  undoLastSubSelection(): void {
+    const stack = this.$subSelections.get();
+    if (stack.length <= 1) {
+      this.clearSelection();
+      return;
+    }
+
+    const newStack = stack.slice(0, -1);
+    this.$subSelections.set(newStack);
+
+    // Invalidate committed cache since the stack changed
+    this._committedBinaryComposite = null;
+    this._committedFeatheredComposite = null;
+    this._committedCompositeCount = 0;
+
+    this.recomputeComposite();
+  }
 
   // --- Drawing Helpers ---
 
   /**
    * Calculates the selection rect from origin to current cursor position.
-   * When shift is held, constrains to a square (for rect mode) or circle (for ellipse mode).
+   * Supports center-draw (C key) and constrain (Ctrl key) modifiers.
    */
   private getSelectionRect(origin: Coordinate, cursor: Coordinate, _isRectMode: boolean): Rect {
+    const isCenter = this.$centerHeld.get();
+
+    if (isCenter) {
+      // Origin is center point — expand outward symmetrically
+      let halfW = Math.abs(cursor.x - origin.x);
+      let halfH = Math.abs(cursor.y - origin.y);
+
+      if (this.$ctrlHeld.get()) {
+        // Constrain to square/circle from center
+        const maxHalf = Math.max(halfW, halfH);
+        halfW = maxHalf;
+        halfH = maxHalf;
+      }
+
+      return {
+        x: origin.x - halfW,
+        y: origin.y - halfH,
+        width: halfW * 2,
+        height: halfH * 2,
+      };
+    }
+
+    // Corner-to-corner mode (default)
     let width = cursor.x - origin.x;
     let height = cursor.y - origin.y;
 
@@ -374,11 +804,10 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       return;
     }
 
-    const origin = this.$drawOrigin.get();
     const cursorPos = this.parent.$cursorPos.get();
     const settings = this.manager.stateApi.getSettings();
 
-    if (!origin || !cursorPos) {
+    if (!cursorPos) {
       return;
     }
 
@@ -387,56 +816,140 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
     const dashLength = this.config.DASH_LENGTH / scale;
     const gapLength = this.config.GAP_LENGTH / scale;
 
-    // Color by combine mode: green=add, red=subtract, blue=replace
+    // Consistent blue outline for all modes
     const combineMode = this.$combineMode.get();
-    let strokeColor: string;
-    let fillColor: string;
-    if (combineMode === 'add') {
-      strokeColor = 'rgba(0, 200, 0, 0.8)';
-      fillColor = 'rgba(0, 200, 0, 0.15)';
-    } else if (combineMode === 'subtract') {
-      strokeColor = 'rgba(255, 50, 50, 0.8)';
-      fillColor = 'rgba(255, 50, 50, 0.15)';
-    } else {
-      strokeColor = 'rgba(0, 120, 255, 0.8)';
-      fillColor = 'rgba(0, 120, 255, 0.1)';
-    }
+    const strokeColor = 'rgba(0, 120, 255, 0.8)';
+    const fillColor = 'rgba(0, 120, 255, 0.1)';
 
-    ctx.setAttr('strokeStyle', strokeColor);
-    ctx.setAttr('lineWidth', lineWidth);
-    ctx.setAttr('lineDash', [dashLength, gapLength]);
-    ctx.setAttr('fillStyle', fillColor);
-
-    if (settings.selectionMode === 'lasso') {
-      const points = this.$lassoPoints.get();
-      if (points.length < 4) {
+    if (settings.selectionMode === 'polygon') {
+      // --- Polygon preview ---
+      const vertices = this.$polygonVertices.get();
+      if (vertices.length < 2) {
         return;
       }
+
+      // Draw committed edges as solid polyline
+      ctx.setAttr('strokeStyle', strokeColor);
+      ctx.setAttr('lineWidth', lineWidth);
+      ctx._context.setLineDash([]);
+      ctx.setAttr('fillStyle', fillColor);
+
       ctx.beginPath();
-      ctx.moveTo(points[0]!, points[1]!);
-      for (let i = 2; i < points.length; i += 2) {
-        ctx.lineTo(points[i]!, points[i + 1]!);
+      ctx.moveTo(vertices[0]!, vertices[1]!);
+      for (let i = 2; i < vertices.length; i += 2) {
+        ctx.lineTo(vertices[i]!, vertices[i + 1]!);
       }
+      // Close back to first vertex and fill
       ctx.closePath();
       ctx._context.fill();
-      ctx._context.stroke();
-    } else {
-      const rect = this.getSelectionRect(origin, cursorPos.relative, settings.selectionMode === 'rectangle');
 
-      if (settings.selectionMode === 'ellipse') {
+      // Stroke the committed edges (solid)
+      ctx.beginPath();
+      ctx.moveTo(vertices[0]!, vertices[1]!);
+      for (let i = 2; i < vertices.length; i += 2) {
+        ctx.lineTo(vertices[i]!, vertices[i + 1]!);
+      }
+      ctx._context.stroke();
+
+      // Rubber-band line from last vertex to cursor (dashed)
+      const lastX = vertices[vertices.length - 2]!;
+      const lastY = vertices[vertices.length - 1]!;
+      ctx._context.setLineDash([dashLength, gapLength]);
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(cursorPos.relative.x, cursorPos.relative.y);
+      ctx._context.stroke();
+
+      // Closing rubber-band from cursor to first vertex (dashed, lighter)
+      ctx.setAttr('strokeStyle', 'rgba(0, 120, 255, 0.4)');
+      ctx.beginPath();
+      ctx.moveTo(cursorPos.relative.x, cursorPos.relative.y);
+      ctx.lineTo(vertices[0]!, vertices[1]!);
+      ctx._context.stroke();
+
+      // Vertex dots
+      ctx._context.setLineDash([]);
+      ctx.setAttr('fillStyle', strokeColor);
+      for (let i = 0; i < vertices.length; i += 2) {
         ctx.beginPath();
-        const cx = rect.x + rect.width / 2;
-        const cy = rect.y + rect.height / 2;
-        const rx = rect.width / 2;
-        const ry = rect.height / 2;
-        ctx._context.ellipse(cx, cy, Math.abs(rx), Math.abs(ry), 0, 0, Math.PI * 2);
+        if (i === 0) {
+          // First vertex: larger (4px) with outline stroke — visual "close target"
+          const firstDotRadius = 4 / scale;
+          ctx._context.arc(vertices[i]!, vertices[i + 1]!, firstDotRadius, 0, Math.PI * 2);
+          ctx._context.fill();
+          ctx.setAttr('strokeStyle', 'rgba(255, 255, 255, 0.9)');
+          ctx.setAttr('lineWidth', 1.5 / scale);
+          ctx._context.stroke();
+          // Restore stroke for subsequent drawing
+          ctx.setAttr('strokeStyle', strokeColor);
+          ctx.setAttr('lineWidth', lineWidth);
+        } else {
+          // Regular vertices: 3px filled dots
+          const dotRadius = 3 / scale;
+          ctx._context.arc(vertices[i]!, vertices[i + 1]!, dotRadius, 0, Math.PI * 2);
+          ctx._context.fill();
+        }
+      }
+    } else {
+      const origin = this.$drawOrigin.get();
+      if (!origin) {
+        return;
+      }
+
+      ctx.setAttr('strokeStyle', strokeColor);
+      ctx.setAttr('lineWidth', lineWidth);
+      ctx._context.setLineDash([dashLength, gapLength]);
+      ctx.setAttr('fillStyle', fillColor);
+
+      if (settings.selectionMode === 'lasso') {
+        const points = this.$lassoPoints.get();
+        if (points.length < 4) {
+          return;
+        }
+        ctx.beginPath();
+        ctx.moveTo(points[0]!, points[1]!);
+        for (let i = 2; i < points.length; i += 2) {
+          ctx.lineTo(points[i]!, points[i + 1]!);
+        }
         ctx.closePath();
         ctx._context.fill();
         ctx._context.stroke();
       } else {
-        ctx._context.fillRect(rect.x, rect.y, rect.width, rect.height);
-        ctx._context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+        const rect = this.getSelectionRect(origin, cursorPos.relative, settings.selectionMode === 'rectangle');
+
+        if (settings.selectionMode === 'ellipse') {
+          ctx.beginPath();
+          const cx = rect.x + rect.width / 2;
+          const cy = rect.y + rect.height / 2;
+          const rx = rect.width / 2;
+          const ry = rect.height / 2;
+          ctx._context.ellipse(cx, cy, Math.abs(rx), Math.abs(ry), 0, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx._context.fill();
+          ctx._context.stroke();
+        } else {
+          ctx._context.fillRect(rect.x, rect.y, rect.width, rect.height);
+          ctx._context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+        }
       }
+    }
+
+    // Draw +/- indicator near cursor for add/subtract modes
+    if (combineMode !== 'replace') {
+      const fontSize = 16 / scale;
+      const symbol = combineMode === 'add' ? '+' : '\u2212';
+      const indicatorX = cursorPos.relative.x + 12 / scale;
+      const indicatorY = cursorPos.relative.y - 4 / scale;
+
+      ctx._context.setLineDash([]);
+      // Dark outline for contrast
+      ctx.setAttr('font', `bold ${fontSize}px sans-serif`);
+      ctx.setAttr('fillStyle', 'rgba(0, 0, 0, 0.7)');
+      ctx._context.fillText(symbol, indicatorX + 1 / scale, indicatorY + 1 / scale);
+
+      // White text
+      ctx.setAttr('fillStyle', 'white');
+      ctx._context.fillText(symbol, indicatorX, indicatorY);
     }
 
     shape.getLayer()?.batchDraw();
@@ -446,15 +959,16 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
 
   /**
    * Generates a binary selection mask for rectangle or ellipse shapes.
+   * Returns the mask canvas and bounds without setting any atoms.
    */
-  private generateShapeMask(rect: Rect, mode: SelectionMode): void {
+  private generateShapeMask(rect: Rect, mode: SelectionMode): { canvas: HTMLCanvasElement; bounds: Rect } | null {
     const canvas = document.createElement('canvas');
     const stageSize = this.manager.stage.getSize();
     canvas.width = stageSize.width;
     canvas.height = stageSize.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      return;
+      return null;
     }
 
     // Scale the canvas to match the stage scale
@@ -477,23 +991,21 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       ctx.fillRect(px, py, pw, ph);
     }
 
-    this.invalidateSdtCache();
-    this.$selectionMask.set(canvas);
-    this.$featheredMask.set(canvas);
-    this.$selectionBounds.set(rect);
+    return { canvas, bounds: rect };
   }
 
   /**
    * Generates a binary selection mask for lasso (freehand polygon).
+   * Returns the mask canvas and bounds without setting any atoms.
    */
-  private generateLassoMask(points: number[]): void {
+  private generateLassoMask(points: number[]): { canvas: HTMLCanvasElement; bounds: Rect } | null {
     const canvas = document.createElement('canvas');
     const stageSize = this.manager.stage.getSize();
     canvas.width = stageSize.width;
     canvas.height = stageSize.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      return;
+      return null;
     }
 
     const scale = this.manager.stage.getScale();
@@ -525,15 +1037,15 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       maxY = Math.max(maxY, points[i + 1]!);
     }
 
-    this.invalidateSdtCache();
-    this.$selectionMask.set(canvas);
-    this.$featheredMask.set(canvas);
-    this.$selectionBounds.set({
-      x: minX,
-      y: minY,
-      width: maxX - minX,
-      height: maxY - minY,
-    });
+    return {
+      canvas,
+      bounds: {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+      },
+    };
   }
 
   // --- Marching Ants ---
@@ -545,58 +1057,47 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       return;
     }
 
-    const settings = this.manager.stateApi.getSettings();
     const scale = this.manager.stage.getScale();
     const lineWidth = this.config.LINE_WIDTH / scale;
     const dashLength = this.config.DASH_LENGTH / scale;
     const gapLength = this.config.GAP_LENGTH / scale;
 
-    // For composite selections (add/subtract), draw bounding rect with overlay showing exact shape
-    if (this.$isComposite.get()) {
+    const stack = this.$subSelections.get();
+
+    // For composite selections (multiple entries), draw bounding rect with overlay showing exact shape
+    if (stack.length > 1) {
       ctx.beginPath();
       ctx._context.rect(bounds.x, bounds.y, bounds.width, bounds.height);
       ctx.closePath();
 
       ctx.setAttr('strokeStyle', 'black');
       ctx.setAttr('lineWidth', lineWidth);
-      ctx.setAttr('lineDash', [dashLength, gapLength]);
-      ctx.setAttr('lineDashOffset', this.dashOffset / scale);
+      ctx._context.setLineDash([dashLength, gapLength]);
+      ctx._context.lineDashOffset = this.dashOffset / scale;
       ctx._context.stroke();
 
       ctx.setAttr('strokeStyle', 'white');
-      ctx.setAttr('lineDashOffset', (this.dashOffset + dashLength) / scale);
+      ctx._context.lineDashOffset = (this.dashOffset + dashLength) / scale;
       ctx._context.stroke();
       return;
     }
 
-    // Draw marching ants based on selection mode
-    if (settings.selectionMode === 'lasso') {
-      const points = this.$lassoPoints.get();
-      if (points.length < 4) {
-        return;
-      }
+    // Single entry — draw shape-specific ants from the entry's stored data
+    if (stack.length === 1) {
+      const entry = stack[0]!;
 
-      ctx.beginPath();
-      ctx.moveTo(points[0]!, points[1]!);
-      for (let i = 2; i < points.length; i += 2) {
-        ctx.lineTo(points[i]!, points[i + 1]!);
-      }
-      ctx.closePath();
-
-      // Black dashes
-      ctx.setAttr('strokeStyle', 'black');
-      ctx.setAttr('lineWidth', lineWidth);
-      ctx.setAttr('lineDash', [dashLength, gapLength]);
-      ctx.setAttr('lineDashOffset', this.dashOffset / scale);
-      ctx._context.stroke();
-
-      // White dashes (offset for contrast)
-      ctx.setAttr('strokeStyle', 'white');
-      ctx.setAttr('lineDashOffset', (this.dashOffset + dashLength) / scale);
-      ctx._context.stroke();
-    } else {
-      // Rectangle or ellipse
-      if (settings.selectionMode === 'ellipse') {
+      if (
+        (entry.selectionMode === 'lasso' || entry.selectionMode === 'polygon') &&
+        entry.lassoPoints &&
+        entry.lassoPoints.length >= 4
+      ) {
+        ctx.beginPath();
+        ctx.moveTo(entry.lassoPoints[0]!, entry.lassoPoints[1]!);
+        for (let i = 2; i < entry.lassoPoints.length; i += 2) {
+          ctx.lineTo(entry.lassoPoints[i]!, entry.lassoPoints[i + 1]!);
+        }
+        ctx.closePath();
+      } else if (entry.selectionMode === 'ellipse') {
         ctx.beginPath();
         const cx = bounds.x + bounds.width / 2;
         const cy = bounds.y + bounds.height / 2;
@@ -605,6 +1106,7 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
         ctx._context.ellipse(cx, cy, Math.abs(rx), Math.abs(ry), 0, 0, Math.PI * 2);
         ctx.closePath();
       } else {
+        // Rectangle (also used for moved/inverted selections)
         ctx.beginPath();
         ctx._context.rect(bounds.x, bounds.y, bounds.width, bounds.height);
         ctx.closePath();
@@ -613,13 +1115,13 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       // Black dashes
       ctx.setAttr('strokeStyle', 'black');
       ctx.setAttr('lineWidth', lineWidth);
-      ctx.setAttr('lineDash', [dashLength, gapLength]);
-      ctx.setAttr('lineDashOffset', this.dashOffset / scale);
+      ctx._context.setLineDash([dashLength, gapLength]);
+      ctx._context.lineDashOffset = this.dashOffset / scale;
       ctx._context.stroke();
 
-      // White dashes (offset)
+      // White dashes (offset for contrast)
       ctx.setAttr('strokeStyle', 'white');
-      ctx.setAttr('lineDashOffset', (this.dashOffset + dashLength) / scale);
+      ctx._context.lineDashOffset = (this.dashOffset + dashLength) / scale;
       ctx._context.stroke();
     }
   };
@@ -652,69 +1154,27 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
   // --- Feathering (SDT-based) ---
 
   /**
-   * Applies feathering to the selection mask using a Signed Distance Transform.
-   * The SDT is computed in a Web Worker and cached — changing radius/direction
-   * only re-evaluates the falloff function (instant).
+   * Builds a feathered canvas from SDT data. Pure function — does not set any atoms.
+   * Used by per-entry feathering methods.
    *
    * Falloff formulas (positive sdt = inside, negative = outside):
    * - Inward:  alpha = smoothstep(0, R, sdt)      — edge=0, R inward=1
    * - Outward: alpha = smoothstep(-R, 0, sdt)      — R outward=0, edge=1
    * - Both:    alpha = smoothstep(-R/2, R/2, sdt)  — R/2 out=0, edge=0.5, R/2 in=1
    */
-  applyFeathering = (radius: number, direction: SelectionFeatherDirection): void => {
-    const mask = this.$selectionMask.get();
-    if (!mask || radius <= 0) {
-      return;
-    }
-
-    // If the SDT is cached for this exact mask, re-evaluate the falloff directly
-    if (this._cachedSdt && this._cachedSdtMask === mask) {
-      this.applyFalloff(this._cachedSdt, this._cachedSdtWidth, this._cachedSdtHeight, radius, direction);
-      return;
-    }
-
-    // Otherwise, compute the SDT in the worker
-    const ctx = mask.getContext('2d');
-    if (!ctx) {
-      return;
-    }
-
-    const imageData = ctx.getImageData(0, 0, mask.width, mask.height);
-    const bufferCopy = imageData.data.buffer.slice(0);
-
-    this.manager.worker.requestSdt(
-      { buffer: bufferCopy, width: mask.width, height: mask.height },
-      (sdt, width, height) => {
-        // Cache the SDT for instant re-evaluation when slider changes
-        this._cachedSdt = sdt;
-        this._cachedSdtWidth = width;
-        this._cachedSdtHeight = height;
-        this._cachedSdtMask = mask;
-
-        // Read current settings (may have changed while worker was computing)
-        const settings = this.manager.stateApi.getSettings();
-        this.applyFalloff(sdt, width, height, settings.selectionFeatherRadius, settings.selectionFeatherDirection);
-      }
-    );
-  };
-
-  /**
-   * Evaluates the SDT falloff and produces the feathered mask canvas.
-   * This is the fast path — no worker needed, just per-pixel alpha computation.
-   */
-  private applyFalloff(
+  private buildFeatheredCanvas(
     sdt: Float32Array,
     width: number,
     height: number,
     radius: number,
     direction: SelectionFeatherDirection
-  ): void {
+  ): HTMLCanvasElement {
     const result = document.createElement('canvas');
     result.width = width;
     result.height = height;
     const ctx = result.getContext('2d');
     if (!ctx) {
-      return;
+      return result;
     }
 
     const imageData = ctx.createImageData(width, height);
@@ -758,23 +1218,32 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
     }
 
     ctx.putImageData(imageData, 0, 0);
-    this.$featheredMask.set(result);
-    this.updateOverlayPreview();
+    return result;
   }
 
   /**
-   * Invalidates the cached SDT. Called when the selection mask changes.
+   * Loads (or reuses) the diagonal hatching pattern image for the given color.
    */
-  private invalidateSdtCache(): void {
-    this._cachedSdt = null;
-    this._cachedSdtMask = null;
-    this._cachedSdtWidth = 0;
-    this._cachedSdtHeight = 0;
+  private getHatchingPattern(color: RgbColor): HTMLImageElement | null {
+    if (
+      this._patternImage &&
+      this._patternColor &&
+      this._patternColor.r === color.r &&
+      this._patternColor.g === color.g &&
+      this._patternColor.b === color.b
+    ) {
+      return this._patternImage;
+    }
+    const img = new Image();
+    img.src = getPatternSVG('diagonal', color);
+    this._patternImage = img;
+    this._patternColor = { ...color };
+    return img;
   }
 
   /**
-   * Shows a semi-transparent colored overlay of the selection mask so the user can see
-   * the selection area and feathered edges. Color and opacity are read from settings.
+   * Shows a hatched overlay of the selection mask matching the inpaint mask visual language.
+   * Color and opacity are read from settings. Diagonal hatching respects feathered alpha.
    */
   updateOverlayPreview = (): void => {
     const feathered = this.$featheredMask.get() ?? this.$selectionMask.get();
@@ -784,9 +1253,9 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
     }
 
     const settings = this.manager.stateApi.getSettings();
-    const { r, g, b } = settings.selectionOverlayColor;
+    const color = settings.selectionOverlayColor;
 
-    // Create a tinted version of the mask
+    // Create an overlay canvas with hatching pattern
     const overlay = document.createElement('canvas');
     overlay.width = feathered.width;
     overlay.height = feathered.height;
@@ -795,12 +1264,35 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       return;
     }
 
-    // Draw the mask
+    // Step 1: Draw the feathered mask as alpha source
     ctx.drawImage(feathered, 0, 0);
-    // Tint using source-in compositing
+
+    // Step 2: Apply diagonal hatching via source-in compositing
     ctx.globalCompositeOperation = 'source-in';
-    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-    ctx.fillRect(0, 0, overlay.width, overlay.height);
+
+    const patternImg = this.getHatchingPattern(color);
+    if (patternImg && patternImg.complete && patternImg.naturalWidth > 0) {
+      // Pattern already loaded — create and fill
+      const pattern = ctx.createPattern(patternImg, 'repeat');
+      if (pattern) {
+        ctx.fillStyle = pattern;
+      } else {
+        ctx.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
+      }
+      ctx.fillRect(0, 0, overlay.width, overlay.height);
+    } else if (patternImg) {
+      // Pattern loading — use onload, fall back to solid color in the meantime
+      ctx.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
+      ctx.fillRect(0, 0, overlay.width, overlay.height);
+      // Re-render when pattern loads
+      patternImg.onload = () => {
+        this.updateOverlayPreview();
+      };
+    } else {
+      // Fallback: solid color tint
+      ctx.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
+      ctx.fillRect(0, 0, overlay.width, overlay.height);
+    }
 
     const img = new Image();
     img.onload = () => {
@@ -952,6 +1444,8 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
 
   /**
    * Inverts the current selection (flips alpha channel).
+   * Clears the stack and pushes a single rectangle entry with the inverted mask.
+   * Fixes oval ants bug and stale mask bug by using a clean stack.
    */
   invertSelection = (): void => {
     const mask = this.$selectionMask.get();
@@ -959,47 +1453,189 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       return;
     }
 
-    const ctx = mask.getContext('2d');
+    // Use the generation BBox as the inversion boundary.
+    // All masks are in screen-pixel space (canvas sized to stageSize), so we need
+    // to convert the bbox world coordinates to screen pixels for clipping.
+    const bboxState = this.manager.stateApi.getBbox();
+    const bboxRect = bboxState.rect;
+    const scale = this.manager.stage.getScale();
+    const stagePos = this.manager.stage.getPosition();
+
+    // Convert bbox world coords to screen-pixel coords
+    const bboxPx = {
+      x: bboxRect.x * scale + stagePos.x,
+      y: bboxRect.y * scale + stagePos.y,
+      w: bboxRect.width * scale,
+      h: bboxRect.height * scale,
+    };
+
+    // Create a new canvas the same size as the existing mask (full stage pixels)
+    const canvas = document.createElement('canvas');
+    canvas.width = mask.width;
+    canvas.height = mask.height;
+    const ctx = canvas.getContext('2d');
     if (!ctx) {
       return;
     }
 
-    const imageData = ctx.getImageData(0, 0, mask.width, mask.height);
-    const data = imageData.data;
-    for (let i = 3; i < data.length; i += 4) {
-      data[i] = 255 - data[i]!;
-    }
-    ctx.putImageData(imageData, 0, 0);
-    this.invalidateSdtCache();
+    // Step 1: Fill the bbox region fully opaque (= select everything in bbox)
+    ctx.fillStyle = 'white';
+    ctx.fillRect(bboxPx.x, bboxPx.y, bboxPx.w, bboxPx.h);
 
-    // Update feathered mask
-    const settings = this.manager.stateApi.getSettings();
-    if (settings.selectionFeatherRadius > 0) {
-      this.applyFeathering(settings.selectionFeatherRadius, settings.selectionFeatherDirection);
-    } else {
-      this.$featheredMask.set(mask);
+    // Step 2: Punch out the original selection using destination-out
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.drawImage(mask, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Bounds in world coordinates = the bbox rect
+    const bounds: Rect = {
+      x: bboxRect.x,
+      y: bboxRect.y,
+      width: bboxRect.width,
+      height: bboxRect.height,
+    };
+
+    // Replace stack with single rectangle entry (fixes oval ants + stale mask bugs)
+    const entry: SubSelection = {
+      binaryMask: canvas,
+      featherRadius: 0,
+      featherDirection: 'both',
+      combineMode: 'replace',
+      featheredMask: null,
+      cachedSdt: null,
+      cachedSdtWidth: 0,
+      cachedSdtHeight: 0,
+      selectionMode: 'rectangle',
+      lassoPoints: null,
+      bounds,
+    };
+
+    this.$subSelections.set([entry]);
+    this._committedBinaryComposite = null;
+    this._committedFeatheredComposite = null;
+    this._committedCompositeCount = 0;
+
+    this.$selectionMask.set(canvas);
+    this.$featheredMask.set(canvas);
+    this.$selectionBounds.set(bounds);
+
+    this.updateOverlayPreview();
+    this.startMarchingAnts();
+  };
+
+  /**
+   * Closes the polygon: validates >= 3 vertices, generates a lasso mask from the
+   * committed vertices, and pushes a sub-selection.
+   */
+  closePolygon = (): void => {
+    const vertices = this.$polygonVertices.get();
+    if (vertices.length < 6) {
+      // Need at least 3 vertices (6 values)
+      this.cancelPolygon();
+      return;
     }
 
-    // Update bounds to full stage
-    const stageSize = this.manager.stage.getSize();
+    // Reset drawing state
+    this.$isDrawing.set(false);
+    this.konva.preview.visible(false);
+
+    // Generate mask from polygon vertices (reuses lasso mask generator)
+    const result = this.generateLassoMask(vertices);
+
+    // Save vertices copy for marching ants
+    const verticesCopy = [...vertices];
+
+    // Clean up polygon state
+    this.$polygonVertices.set([]);
+    this.$polygonInProgress.set(false);
+    this._lastClickTime = 0;
+    this._lastClickPos = null;
+
+    // Push sub-selection
+    if (result) {
+      this.pushSubSelection(result.canvas, result.bounds, this.$combineMode.get(), 'polygon', verticesCopy);
+    }
+  };
+
+  /**
+   * Cancels the in-progress polygon. For add/subtract, refreshes from existing stack.
+   */
+  cancelPolygon = (): void => {
+    this.$isDrawing.set(false);
+    this.konva.preview.visible(false);
+    this.$polygonVertices.set([]);
+    this.$polygonInProgress.set(false);
+    this._lastClickTime = 0;
+    this._lastClickPos = null;
+
+    if (this.$combineMode.get() !== 'replace' && this.$subSelections.get().length > 0) {
+      this.recomputeComposite();
+    }
+  };
+
+  /**
+   * Translates (moves) both the binary and feathered selection masks by the given
+   * stage-space delta from the drag start. Uses snapshotted originals to avoid
+   * compounding translations. Redraws overlay and marching ants.
+   */
+  private translateMasks(dxStage: number, dyStage: number): void {
+    const origMask = this._moveOriginalMask;
+    const origFeathered = this._moveOriginalFeathered;
+    const originalBounds = this._moveOriginalBounds;
+    if (!origMask || !originalBounds) {
+      return;
+    }
+
     const scale = this.manager.stage.getScale();
-    const stagePos = this.manager.stage.getPosition();
+    const dxPx = Math.round(dxStage * scale);
+    const dyPx = Math.round(dyStage * scale);
+
+    // Translate binary mask from original snapshot
+    const newMask = document.createElement('canvas');
+    newMask.width = origMask.width;
+    newMask.height = origMask.height;
+    const maskCtx = newMask.getContext('2d');
+    if (maskCtx) {
+      maskCtx.drawImage(origMask, dxPx, dyPx);
+    }
+    this.$selectionMask.set(newMask);
+
+    // Translate feathered mask from original snapshot
+    if (origFeathered && origFeathered !== origMask) {
+      const newFeathered = document.createElement('canvas');
+      newFeathered.width = origFeathered.width;
+      newFeathered.height = origFeathered.height;
+      const fCtx = newFeathered.getContext('2d');
+      if (fCtx) {
+        fCtx.drawImage(origFeathered, dxPx, dyPx);
+      }
+      this.$featheredMask.set(newFeathered);
+    } else {
+      this.$featheredMask.set(newMask);
+    }
+
+    // Update bounds relative to original
     this.$selectionBounds.set({
-      x: -stagePos.x / scale,
-      y: -stagePos.y / scale,
-      width: stageSize.width / scale,
-      height: stageSize.height / scale,
+      x: originalBounds.x + dxStage,
+      y: originalBounds.y + dyStage,
+      width: originalBounds.width,
+      height: originalBounds.height,
     });
 
-    // Refresh marching ants
+    // Refresh visuals
+    this.updateOverlayPreview();
     this.konva.marchingAnts.getLayer()?.batchDraw();
-  };
+  }
 
   /**
    * Clears the selection - called on tool change or deselect.
    */
   clearSelection = (): void => {
-    this.invalidateSdtCache();
+    this.$subSelections.set([]);
+    this._committedBinaryComposite = null;
+    this._committedFeatheredComposite = null;
+    this._committedCompositeCount = 0;
+
     this.$selectionMask.set(null);
     this.$featheredMask.set(null);
     this.$selectionBounds.set(null);
@@ -1007,8 +1643,17 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
     this.$drawOrigin.set(null);
     this.$lassoPoints.set([]);
     this.$combineMode.set('replace');
-    this.$previousMask.set(null);
-    this.$isComposite.set(false);
+    this.$centerHeld.set(false);
+    this.$sKeyHeld.set(false);
+    this.$polygonVertices.set([]);
+    this.$polygonInProgress.set(false);
+    this._lastClickTime = 0;
+    this._lastClickPos = null;
+    this.$selectionSubMode.set('draw');
+    this._moveStartPos = null;
+    this._moveOriginalBounds = null;
+    this._moveOriginalMask = null;
+    this._moveOriginalFeathered = null;
 
     this.stopMarchingAnts();
     this.konva.preview.visible(false);
@@ -1102,25 +1747,6 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
   }
 
   /**
-   * Restores a previously stashed mask when an add/subtract draw gesture is canceled
-   * (e.g., drawn shape too small or too few lasso points).
-   */
-  private restorePreviousMask(mask: HTMLCanvasElement): void {
-    this.invalidateSdtCache();
-    this.$selectionMask.set(mask);
-    this.$featheredMask.set(mask);
-    this.$previousMask.set(null);
-
-    const settings = this.manager.stateApi.getSettings();
-    if (settings.selectionFeatherRadius > 0) {
-      this.applyFeathering(settings.selectionFeatherRadius, settings.selectionFeatherDirection);
-    }
-
-    this.updateOverlayPreview();
-    this.startMarchingAnts();
-  }
-
-  /**
    * Creates a filled canvas masked by the selection.
    */
   private createFilledMask(mask: HTMLCanvasElement, color: RgbaColor): HTMLCanvasElement | null {
@@ -1161,6 +1787,7 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       hasSelection: this.hasSelection(),
       isDrawing: this.$isDrawing.get(),
       selectionBounds: this.$selectionBounds.get(),
+      subSelectionCount: this.$subSelections.get().length,
     };
   };
 

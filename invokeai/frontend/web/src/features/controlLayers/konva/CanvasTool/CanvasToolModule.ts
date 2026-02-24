@@ -15,7 +15,10 @@ import {
   getIsPrimaryMouseDown,
   getPrefixedId,
 } from 'features/controlLayers/konva/util';
-import { selectCanvasSettingsSlice } from 'features/controlLayers/store/canvasSettingsSlice';
+import {
+  selectCanvasSettingsSlice,
+  settingsSelectionFeatherRadiusChanged,
+} from 'features/controlLayers/store/canvasSettingsSlice';
 import { selectCanvasSlice } from 'features/controlLayers/store/selectors';
 import type {
   CanvasControlLayerState,
@@ -555,6 +558,23 @@ export class CanvasToolModule extends CanvasModuleBase {
       return;
     }
 
+    // S+scroll for selection feather radius (before getCanDraw since selection doesn't require it)
+    if (this.$tool.get() === 'selection' && this.tools.selection.$sKeyHeld.get()) {
+      e.evt.preventDefault();
+      const settings = this.manager.stateApi.getSettings();
+      const step = e.evt.ctrlKey || e.evt.metaKey ? 10 : 1;
+      let delta = e.evt.deltaY;
+      if (settings.invertScrollForToolWidth) {
+        delta = -delta;
+      }
+      const change = delta < 0 ? step : -step;
+      const current = settings.selectionFeatherRadius;
+      const newRadius = Math.max(0, Math.min(1024, current + change));
+      this.manager.stateApi.store.dispatch(settingsSelectionFeatherRadiusChanged(newRadius));
+      this.render();
+      return;
+    }
+
     if (!this.getCanDraw()) {
       return;
     }
@@ -631,6 +651,60 @@ export class CanvasToolModule extends CanvasModuleBase {
       return;
     }
 
+    // --- Selection tool keyboard shortcuts ---
+    if (this.$tool.get() === 'selection') {
+      const sel = this.tools.selection;
+      const hasSelection = sel.hasSelection();
+
+      // D = draw sub-mode (prevent D → setFillColorsToDefault)
+      if ((e.key === 'd' || e.key === 'D') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        sel.$selectionSubMode.set('draw');
+        sel.syncCursorStyle();
+        e.stopImmediatePropagation();
+        return;
+      }
+
+      // M = move sub-mode (only when selection exists)
+      if ((e.key === 'm' || e.key === 'M') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && hasSelection) {
+        sel.$selectionSubMode.set('move');
+        sel.syncCursorStyle();
+        return;
+      }
+
+      // F = fill selection (prevent F → togglePanels)
+      if ((e.key === 'f' || e.key === 'F') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && hasSelection) {
+        sel.fillSelection();
+        e.stopImmediatePropagation();
+        return;
+      }
+
+      // Delete/Backspace = delete selection content
+      if ((e.key === 'Delete' || e.key === 'Backspace') && hasSelection) {
+        sel.deleteSelection();
+        return;
+      }
+
+      // Shift+I = invert selection
+      if ((e.key === 'i' || e.key === 'I') && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && hasSelection) {
+        sel.invertSelection();
+        return;
+      }
+
+      // Ctrl+Z = undo last sub-selection (only when stack has multiple entries)
+      if (
+        e.key === 'z' &&
+        (e.ctrlKey || e.metaKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        sel.$subSelections.get().length > 1
+      ) {
+        sel.undoLastSubSelection();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        return;
+      }
+    }
+
     if (e.key === KEY_ESCAPE) {
       // Cancel shape drawing on escape
       e.preventDefault();
@@ -659,12 +733,20 @@ export class CanvasToolModule extends CanvasModuleBase {
     if (e.key === KEY_ALT) {
       // Don't switch to color picker when selection tool is active (Alt used for subtract)
       if (this.$tool.get() === 'selection') {
+        e.preventDefault();
         return;
       }
       // Select the color picker on alt key down
       e.preventDefault();
       this.$toolBuffer.set(this.$tool.get());
       this.$tool.set('colorPicker');
+    }
+
+    if (e.key === 'c' || e.key === 'C') {
+      // Don't switch to bbox tool when selection tool is active (C used for center-draw)
+      if (this.$tool.get() === 'selection') {
+        return;
+      }
     }
   };
 
@@ -698,6 +780,16 @@ export class CanvasToolModule extends CanvasModuleBase {
       // Revert the tool to the previous tool on alt key up
       e.preventDefault();
       this.revertToolBuffer();
+      return;
+    }
+
+    // M release: revert selection sub-mode from move back to draw
+    if ((e.key === 'm' || e.key === 'M') && this.$tool.get() === 'selection') {
+      const sel = this.tools.selection;
+      if (sel.$selectionSubMode.get() === 'move') {
+        sel.$selectionSubMode.set('draw');
+        sel.syncCursorStyle();
+      }
       return;
     }
   };

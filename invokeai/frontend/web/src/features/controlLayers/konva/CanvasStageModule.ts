@@ -352,6 +352,11 @@ export class CanvasStageModule extends CanvasModuleBase {
       return;
     }
 
+    // Don't zoom when selection tool is using S+scroll for feather radius
+    if (this.manager.tool.$tool.get() === 'selection' && this.manager.tool.tools.selection.$sKeyHeld.get()) {
+      return;
+    }
+
     // We need the absolute cursor position - not the scaled position
     const cursorPos = this.konva.stage.getPointerPosition();
 

@@ -5,7 +5,13 @@ import { useCanvasIsBusy } from 'features/controlLayers/hooks/useCanvasIsBusy';
 import { computed } from 'nanostores';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PiPaintBucketBold, PiSelectionInverseBold, PiSelectionSlashBold, PiTrashBold } from 'react-icons/pi';
+import {
+  PiArrowCounterClockwiseBold,
+  PiPaintBucketBold,
+  PiSelectionInverseBold,
+  PiSelectionSlashBold,
+  PiTrashBold,
+} from 'react-icons/pi';
 
 export const CanvasContextMenuSelectionItems = memo(() => {
   const { t } = useTranslation();
@@ -24,6 +30,12 @@ export const CanvasContextMenuSelectionItems = memo(() => {
   );
   const hasSelection = useStore($hasSelection);
 
+  const $canUndoShape = useMemo(
+    () => computed(canvasManager.tool.tools.selection.$subSelections, (stack) => stack.length > 1),
+    [canvasManager.tool.tools.selection.$subSelections]
+  );
+  const canUndoShape = useStore($canUndoShape);
+
   const onFill = useCallback(() => {
     canvasManager.tool.tools.selection.fillSelection();
   }, [canvasManager]);
@@ -34,6 +46,10 @@ export const CanvasContextMenuSelectionItems = memo(() => {
 
   const onInvert = useCallback(() => {
     canvasManager.tool.tools.selection.invertSelection();
+  }, [canvasManager]);
+
+  const onUndoShape = useCallback(() => {
+    canvasManager.tool.tools.selection.undoLastSubSelection();
   }, [canvasManager]);
 
   const onDeselect = useCallback(() => {
@@ -55,6 +71,11 @@ export const CanvasContextMenuSelectionItems = memo(() => {
       <MenuItem icon={<PiSelectionInverseBold />} isDisabled={isBusy} onClick={onInvert}>
         {t('controlLayers.selection.invert', { defaultValue: 'Invert Selection' })}
       </MenuItem>
+      {canUndoShape && (
+        <MenuItem icon={<PiArrowCounterClockwiseBold />} isDisabled={isBusy} onClick={onUndoShape}>
+          {t('controlLayers.selection.undoLastShape', { defaultValue: 'Undo Last Shape' })}
+        </MenuItem>
+      )}
       <MenuDivider />
       <MenuItem icon={<PiSelectionSlashBold />} onClick={onDeselect}>
         {t('controlLayers.selection.deselect', { defaultValue: 'Deselect' })}

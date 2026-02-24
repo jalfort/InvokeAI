@@ -14,7 +14,7 @@ export type TransformSmoothingMode = z.infer<typeof zTransformSmoothingMode>;
 
 const zGradientType = z.enum(['linear', 'radial']);
 
-const zSelectionMode = z.enum(['rectangle', 'ellipse', 'lasso']);
+const zSelectionMode = z.enum(['rectangle', 'ellipse', 'lasso', 'polygon']);
 export type SelectionMode = z.infer<typeof zSelectionMode>;
 
 const zSelectionFeatherDirection = z.enum(['both', 'inward', 'outward']);
@@ -131,7 +131,7 @@ const zCanvasSettingsState = z.object({
   /**
    * The feather radius for selection operations (0-100px).
    */
-  selectionFeatherRadius: z.number().min(0).max(100).default(0),
+  selectionFeatherRadius: z.number().min(0).default(0),
   /**
    * The feather direction for selection operations.
    */
@@ -149,7 +149,7 @@ const zCanvasSettingsState = z.object({
       g: z.number().int().min(0).max(255),
       b: z.number().int().min(0).max(255),
     })
-    .default({ r: 160, g: 32, b: 240 }),
+    .default({ r: 220, g: 40, b: 40 }),
 });
 
 type CanvasSettingsState = z.infer<typeof zCanvasSettingsState>;
@@ -184,7 +184,7 @@ const getInitialState = (): CanvasSettingsState => ({
   selectionFeatherRadius: 0,
   selectionFeatherDirection: 'both',
   selectionOverlayOpacity: 0.5,
-  selectionOverlayColor: { r: 160, g: 32, b: 240 },
+  selectionOverlayColor: { r: 220, g: 40, b: 40 },
 });
 
 const slice = createSlice({

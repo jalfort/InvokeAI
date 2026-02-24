@@ -28,7 +28,7 @@ import {
   settingsSelectionOverlayOpacityChanged,
 } from 'features/controlLayers/store/canvasSettingsSlice';
 import type { RgbColor } from 'features/controlLayers/store/types';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   PiArrowsInBold,
@@ -36,6 +36,7 @@ import {
   PiArrowsOutBold,
   PiCircleDashedBold,
   PiPathBold,
+  PiPolygonBold,
   PiSelectionBold,
 } from 'react-icons/pi';
 
@@ -54,10 +55,38 @@ export const ToolSelectionSettings = memo(() => {
   const onSelectRectangle = useCallback(() => dispatch(settingsSelectionModeChanged('rectangle')), [dispatch]);
   const onSelectEllipse = useCallback(() => dispatch(settingsSelectionModeChanged('ellipse')), [dispatch]);
   const onSelectLasso = useCallback(() => dispatch(settingsSelectionModeChanged('lasso')), [dispatch]);
+  const onSelectPolygon = useCallback(() => dispatch(settingsSelectionModeChanged('polygon')), [dispatch]);
+
+  // Track Ctrl key for 10x stepper increment
+  const ctrlHeldRef = useRef(false);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control') {
+        ctrlHeldRef.current = true;
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control') {
+        ctrlHeldRef.current = false;
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
 
   const onFeatherRadiusChange = useCallback(
     (value: number) => {
-      dispatch(settingsSelectionFeatherRadiusChanged(value));
+      if (ctrlHeldRef.current) {
+        // Ctrl held: snap to nearest 10
+        const snapped = Math.round(value / 10) * 10;
+        dispatch(settingsSelectionFeatherRadiusChanged(snapped));
+      } else {
+        dispatch(settingsSelectionFeatherRadiusChanged(value));
+      }
     },
     [dispatch]
   );
@@ -111,6 +140,15 @@ export const ToolSelectionSettings = memo(() => {
             onClick={onSelectLasso}
           />
         </Tooltip>
+        <Tooltip label={t('controlLayers.selection.polygon', { defaultValue: 'Polygon' })}>
+          <IconButton
+            aria-label={t('controlLayers.selection.polygon', { defaultValue: 'Polygon' })}
+            icon={<PiPolygonBold />}
+            colorScheme={selectionMode === 'polygon' ? 'invokeBlue' : 'base'}
+            variant="solid"
+            onClick={onSelectPolygon}
+          />
+        </Tooltip>
       </ButtonGroup>
 
       {/* Feather Radius */}
@@ -121,8 +159,9 @@ export const ToolSelectionSettings = memo(() => {
         <Box w={28}>
           <CompositeNumberInput
             min={0}
-            max={100}
-            step={1}
+            max={1024}
+            step={5}
+            fineStep={1}
             value={featherRadius}
             onChange={onFeatherRadiusChange}
             defaultValue={0}

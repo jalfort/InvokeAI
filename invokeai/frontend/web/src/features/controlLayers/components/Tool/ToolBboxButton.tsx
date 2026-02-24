@@ -9,13 +9,14 @@ export const ToolBboxButton = memo(() => {
   const { t } = useTranslation();
   const selectBbox = useSelectTool('bbox');
   const isSelected = useToolIsSelected('bbox');
+  const isSelectionToolActive = useToolIsSelected('selection');
 
   useRegisteredHotkeys({
     id: 'selectBboxTool',
     category: 'canvas',
     callback: selectBbox,
-    options: { enabled: !isSelected },
-    dependencies: [selectBbox, isSelected],
+    options: { enabled: !isSelected && !isSelectionToolActive },
+    dependencies: [selectBbox, isSelected, isSelectionToolActive],
   });
 
   return (

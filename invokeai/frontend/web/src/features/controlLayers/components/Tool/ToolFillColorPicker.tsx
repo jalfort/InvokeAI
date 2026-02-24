@@ -15,6 +15,7 @@ import { createSelector } from '@reduxjs/toolkit';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import RgbaColorPicker from 'common/components/ColorPicker/RgbaColorPicker';
 import { rgbaColorToString } from 'common/util/colorCodeTransformers';
+import { useToolIsSelected } from 'features/controlLayers/components/Tool/hooks';
 import {
   selectCanvasSettingsSlice,
   selectFillColorPickerPinned,
@@ -73,13 +74,14 @@ export const ToolFillColorPicker = memo(() => {
   }, [dispatch, disclosure, isPinned]);
 
   // Note: when pinned, the persistent color picker renders in the canvas overlay instead.
+  const isSelectionToolActive = useToolIsSelected('selection');
 
   useRegisteredHotkeys({
     id: 'setFillColorsToDefault',
     category: 'canvas',
     callback: () => dispatch(settingsColorsSetToDefault()),
-    options: { preventDefault: true },
-    dependencies: [dispatch],
+    options: { preventDefault: true, enabled: !isSelectionToolActive },
+    dependencies: [dispatch, isSelectionToolActive],
   });
 
   useRegisteredHotkeys({

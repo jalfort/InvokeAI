@@ -12,10 +12,7 @@ export const buildExternalAPIGraph = async (arg: GraphBuilderArg): Promise<Graph
   const { state, manager, preCompositedCanvas } = arg;
   const externalApi = selectExternalApiSlice(state);
 
-  log.debug(
-    { provider: externalApi.providerId, modelId: externalApi.modelId },
-    'Building External API graph'
-  );
+  log.debug({ provider: externalApi.providerId, modelId: externalApi.modelId }, 'Building External API graph');
 
   const g = new Graph(getPrefixedId('external_api_graph'));
 
