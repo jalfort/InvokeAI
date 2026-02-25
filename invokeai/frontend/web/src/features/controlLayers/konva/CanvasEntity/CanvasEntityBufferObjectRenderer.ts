@@ -243,6 +243,12 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
     // Move the buffer to the persistent objects group/renderers
     this.parent.renderer.adoptObjectRenderer(this.renderer);
 
+    // Soft brush lines use a custom sceneFunc that doesn't survive Konva's clone().
+    // Bake the stroke canvas into a Konva.Image so it rasterizes/clones correctly.
+    if (this.renderer instanceof CanvasObjectSoftBrushLine) {
+      this.renderer.rasterizeToImage();
+    }
+
     if (pushToState) {
       const entityIdentifier = this.parent.entityIdentifier;
       switch (this.state.type) {
