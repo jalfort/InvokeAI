@@ -355,7 +355,7 @@ export const ToolPercentPicker = memo(({ value, onChange, min = 0, defaultValue 
   }, [stopPollingInput]);
 
   return (
-    <Flex ref={ref} alignItems="center" h="full" flexGrow={1} flexShrink={1} justifyContent="flex-start" px={4}>
+    <Flex ref={ref} alignItems="center" h="full" flexGrow={0} flexShrink={1} flexBasis="320px" minW="280px" justifyContent="flex-start" px={4}>
       {componentType === 'slider' && (
         <SliderPercentPickerComponent
           localValue={localValue}

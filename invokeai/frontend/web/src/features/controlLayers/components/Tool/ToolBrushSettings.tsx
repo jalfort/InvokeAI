@@ -35,7 +35,7 @@ export const ToolBrushSettings = memo(() => {
 
   return (
     <Flex alignItems="center" gap={4} flexGrow={1}>
-      <Flex flexGrow={2} flexShrink={1}>
+      <Flex flexGrow={0} flexShrink={1} flexBasis="320px" minW="280px">
         <ToolWidthPicker />
       </Flex>
       <ToolPercentPicker value={hardnessValue} onChange={onHardnessChange} min={0} defaultValue={100} />
