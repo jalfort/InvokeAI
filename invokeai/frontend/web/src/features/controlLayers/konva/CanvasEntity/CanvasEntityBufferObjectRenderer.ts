@@ -221,7 +221,7 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
    * Commits the current buffer object, pushing the buffer object state back to the application state.
    */
   commitBuffer = (options?: { pushToState?: boolean }) => {
-    const { pushToState } = { ...options, pushToState: true };
+    const { pushToState } = { pushToState: true, ...options };
 
     if (!this.state || !this.renderer) {
       this.log.trace('No buffer to commit');

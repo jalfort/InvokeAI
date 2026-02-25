@@ -145,6 +145,8 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
   private _patternColor: RgbColor | null = null;
   /** Unsubscribe from Redux store */
   private unsubscribeStore: (() => void) | null = null;
+  /** Guard against concurrent fill/delete operations */
+  private _isOperationInProgress = false;
 
   konva: {
     group: Konva.Group;
@@ -1326,6 +1328,10 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
    * Rasterizes the entity first, then adds the fill as a second image via the buffer renderer.
    */
   fillSelection = async (): Promise<void> => {
+    if (this._isOperationInProgress) {
+      return;
+    }
+
     const mask = this.$featheredMask.get() ?? this.$selectionMask.get();
     const selectedEntity = this.manager.stateApi.getSelectedEntityAdapter();
 
@@ -1333,51 +1339,59 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       return;
     }
 
-    const color = this.manager.stateApi.getCurrentColor();
-    const scale = this.manager.stage.getScale();
-    const stagePos = this.manager.stage.getPosition();
+    this._isOperationInProgress = true;
+    try {
+      const color = this.manager.stateApi.getCurrentColor();
+      const scale = this.manager.stage.getScale();
+      const stagePos = this.manager.stage.getPosition();
 
-    // Step 1: Rasterize entity to consolidate all objects into a single image at known position
-    const rect = selectedEntity.transformer.getRelativeRect();
-    await selectedEntity.renderer.rasterize({ rect, replaceObjects: true });
+      // Flush any pending rect calculation so we get fresh bounds
+      selectedEntity.transformer.calculateRect.flush();
+      const rect = selectedEntity.transformer.getRelativeRect();
 
-    // Step 2: Create fill canvas matching the entity's rect dimensions
-    const fillCanvas = document.createElement('canvas');
-    fillCanvas.width = Math.max(1, Math.round(rect.width));
-    fillCanvas.height = Math.max(1, Math.round(rect.height));
-    const ctx = fillCanvas.getContext('2d');
-    if (!ctx) {
-      return;
+      // Step 1: Rasterize entity to consolidate all objects into a single image at known position
+      await selectedEntity.renderer.rasterize({ rect, replaceObjects: true });
+
+      // Step 2: Create fill canvas matching the entity's rect dimensions
+      const fillCanvas = document.createElement('canvas');
+      fillCanvas.width = Math.max(1, Math.round(rect.width));
+      fillCanvas.height = Math.max(1, Math.round(rect.height));
+      const ctx = fillCanvas.getContext('2d');
+      if (!ctx) {
+        return;
+      }
+
+      // Step 3: Create the color-masked fill at screen resolution
+      const colorMask = this.createFilledMask(mask, color);
+      if (!colorMask) {
+        return;
+      }
+
+      // Step 4: Draw the color mask at the correct entity-relative offset
+      // Screen pixel (0,0) maps to stage-relative (-stagePos.x/scale, -stagePos.y/scale)
+      // Entity space starts at rect.x, rect.y in stage-relative space
+      const offsetX = -stagePos.x / scale - rect.x;
+      const offsetY = -stagePos.y / scale - rect.y;
+      ctx.drawImage(colorMask, offsetX, offsetY, colorMask.width / scale, colorMask.height / scale);
+
+      // Step 5: Upload the fill canvas
+      const blob = await canvasToBlob(fillCanvas);
+      const imageDTO = await uploadImage({
+        file: new File([blob], 'selection_fill.png', { type: 'image/png' }),
+        image_category: 'other',
+        is_intermediate: true,
+        silent: true,
+      });
+      const imageObject = imageDTOToImageObject(imageDTO);
+
+      // Step 6: Add via buffer renderer pipeline (handles Konva + Redux)
+      await selectedEntity.bufferRenderer.setBuffer(imageObject);
+      selectedEntity.bufferRenderer.commitBuffer();
+
+      this.clearSelection();
+    } finally {
+      this._isOperationInProgress = false;
     }
-
-    // Step 3: Create the color-masked fill at screen resolution
-    const colorMask = this.createFilledMask(mask, color);
-    if (!colorMask) {
-      return;
-    }
-
-    // Step 4: Draw the color mask at the correct entity-relative offset
-    // Screen pixel (0,0) maps to stage-relative (-stagePos.x/scale, -stagePos.y/scale)
-    // Entity space starts at rect.x, rect.y in stage-relative space
-    const offsetX = -stagePos.x / scale - rect.x;
-    const offsetY = -stagePos.y / scale - rect.y;
-    ctx.drawImage(colorMask, offsetX, offsetY, colorMask.width / scale, colorMask.height / scale);
-
-    // Step 5: Upload the fill canvas
-    const blob = await canvasToBlob(fillCanvas);
-    const imageDTO = await uploadImage({
-      file: new File([blob], 'selection_fill.png', { type: 'image/png' }),
-      image_category: 'other',
-      is_intermediate: true,
-      silent: true,
-    });
-    const imageObject = imageDTOToImageObject(imageDTO);
-
-    // Step 6: Add via buffer renderer pipeline (handles Konva + Redux)
-    await selectedEntity.bufferRenderer.setBuffer(imageObject);
-    selectedEntity.bufferRenderer.commitBuffer();
-
-    this.clearSelection();
   };
 
   /**
@@ -1385,6 +1399,10 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
    * Rasterizes the entity, composites the deletion, then replaces the entity.
    */
   deleteSelection = async (): Promise<void> => {
+    if (this._isOperationInProgress) {
+      return;
+    }
+
     const mask = this.$featheredMask.get() ?? this.$selectionMask.get();
     const selectedEntity = this.manager.stateApi.getSelectedEntityAdapter();
 
@@ -1392,54 +1410,72 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
       return;
     }
 
-    const scale = this.manager.stage.getScale();
-    const stagePos = this.manager.stage.getPosition();
+    this._isOperationInProgress = true;
+    try {
+      const scale = this.manager.stage.getScale();
+      const stagePos = this.manager.stage.getPosition();
 
-    // Step 1: Rasterize entity without replacing to get current state as ImageDTO
-    const rect = selectedEntity.transformer.getRelativeRect();
-    const existingImageDTO = await selectedEntity.renderer.rasterize({ rect, replaceObjects: false });
+      // Flush any pending rect calculation so we get fresh bounds
+      selectedEntity.transformer.calculateRect.flush();
+      const rect = selectedEntity.transformer.getRelativeRect();
 
-    // Step 2: Load the rasterized image
-    const existingImg = await loadImage(existingImageDTO.image_url);
+      // Step 1: Capture entity's current visual state as a blob directly, WITHOUT dispatching
+      // to Redux. Using rasterize({replaceObjects: false}) here would dispatch a no-op
+      // entityRasterized action that gets throttled with the real replacement action (1s window),
+      // causing the actual delete to be excluded from undo history.
+      const existingBlob = await selectedEntity.renderer.getBlob({ rect });
+      const existingImageDTO = await uploadImage({
+        file: new File([existingBlob], 'selection_snapshot.png', { type: 'image/png' }),
+        image_category: 'other',
+        is_intermediate: true,
+        silent: true,
+      });
 
-    // Step 3: Create composite canvas and draw existing entity
-    const composite = document.createElement('canvas');
-    composite.width = Math.max(1, Math.round(rect.width));
-    composite.height = Math.max(1, Math.round(rect.height));
-    const ctx = composite.getContext('2d');
-    if (!ctx) {
-      return;
+      // Step 2: Load the snapshot image
+      const existingImg = await loadImage(existingImageDTO.image_url);
+
+      // Step 3: Create composite canvas and draw existing entity
+      const composite = document.createElement('canvas');
+      composite.width = Math.max(1, Math.round(rect.width));
+      composite.height = Math.max(1, Math.round(rect.height));
+      const ctx = composite.getContext('2d');
+      if (!ctx) {
+        return;
+      }
+      ctx.drawImage(existingImg, 0, 0, composite.width, composite.height);
+
+      // Step 4: Erase the selection area using destination-out
+      // Transform the selection mask from screen coords to entity-relative coords
+      const offsetX = -stagePos.x / scale - rect.x;
+      const offsetY = -stagePos.y / scale - rect.y;
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.drawImage(mask, offsetX, offsetY, mask.width / scale, mask.height / scale);
+
+      // Step 5: Upload the composite
+      const blob = await canvasToBlob(composite);
+      const imageDTO = await uploadImage({
+        file: new File([blob], 'selection_delete.png', { type: 'image/png' }),
+        image_category: 'other',
+        is_intermediate: true,
+        silent: true,
+      });
+      const imageObject = imageDTOToImageObject(imageDTO);
+
+      // Step 6: Replace entity with composite (Konva + Redux)
+      await selectedEntity.bufferRenderer.setBuffer(imageObject);
+      selectedEntity.bufferRenderer.commitBuffer({ pushToState: false });
+
+      this.manager.stateApi.rasterizeEntity({
+        entityIdentifier: selectedEntity.entityIdentifier,
+        imageObject,
+        position: { x: Math.round(rect.x), y: Math.round(rect.y) },
+        replaceObjects: true,
+      });
+
+      this.clearSelection();
+    } finally {
+      this._isOperationInProgress = false;
     }
-    ctx.drawImage(existingImg, 0, 0, composite.width, composite.height);
-
-    // Step 4: Erase the selection area using destination-out
-    // Transform the selection mask from screen coords to entity-relative coords
-    const offsetX = -stagePos.x / scale - rect.x;
-    const offsetY = -stagePos.y / scale - rect.y;
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.drawImage(mask, offsetX, offsetY, mask.width / scale, mask.height / scale);
-
-    // Step 5: Upload the composite
-    const blob = await canvasToBlob(composite);
-    const imageDTO = await uploadImage({
-      file: new File([blob], 'selection_delete.png', { type: 'image/png' }),
-      image_category: 'other',
-      is_intermediate: true,
-      silent: true,
-    });
-    const imageObject = imageDTOToImageObject(imageDTO);
-
-    // Step 6: Replace entity with composite (Konva + Redux)
-    await selectedEntity.bufferRenderer.setBuffer(imageObject);
-    selectedEntity.bufferRenderer.commitBuffer({ pushToState: false });
-    this.manager.stateApi.rasterizeEntity({
-      entityIdentifier: selectedEntity.entityIdentifier,
-      imageObject,
-      position: { x: Math.round(rect.x), y: Math.round(rect.y) },
-      replaceObjects: true,
-    });
-
-    this.clearSelection();
   };
 
   /**
