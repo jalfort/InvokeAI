@@ -228,6 +228,36 @@ const zCanvasBrushLineWithPressureState = z.object({
 });
 export type CanvasBrushLineWithPressureState = z.infer<typeof zCanvasBrushLineWithPressureState>;
 
+const zCanvasSoftBrushLineState = z.object({
+  id: zId,
+  type: z.literal('soft_brush_line'),
+  strokeWidth: z.number().min(1),
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  /**
+   * Points without pressure are in the format [x1, y1, x2, y2, ...]
+   */
+  points: zPoints,
+  color: zRgbaColor,
+  clip: zRect.nullable(),
+});
+export type CanvasSoftBrushLineState = z.infer<typeof zCanvasSoftBrushLineState>;
+
+const zCanvasSoftBrushLineWithPressureState = z.object({
+  id: zId,
+  type: z.literal('soft_brush_line_with_pressure'),
+  strokeWidth: z.number().min(1),
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  /**
+   * Points with pressure are in the format [x1, y1, pressure1, x2, y2, pressure2, ...]
+   */
+  points: zPointsWithPressure,
+  color: zRgbaColor,
+  clip: zRect.nullable(),
+});
+export type CanvasSoftBrushLineWithPressureState = z.infer<typeof zCanvasSoftBrushLineWithPressureState>;
+
 const zCanvasEraserLineState = z.object({
   id: zId,
   type: z.literal('eraser_line'),
@@ -307,10 +337,12 @@ export type CanvasImageState = z.infer<typeof zCanvasImageState>;
 const zCanvasObjectState = z.union([
   zCanvasImageState,
   zCanvasBrushLineState,
-  zCanvasEraserLineState,
-  zCanvasRectState,
   zCanvasBrushLineWithPressureState,
+  zCanvasSoftBrushLineState,
+  zCanvasSoftBrushLineWithPressureState,
+  zCanvasEraserLineState,
   zCanvasEraserLineWithPressureState,
+  zCanvasRectState,
   zCanvasGradientState,
 ]);
 export type CanvasObjectState = z.infer<typeof zCanvasObjectState>;
@@ -919,7 +951,11 @@ export type EntityIdentifierPayload<
 export type EntityMovedToPayload = EntityIdentifierPayload<{ position: Coordinate }>;
 export type EntityMovedByPayload = EntityIdentifierPayload<{ offset: Coordinate }>;
 export type EntityBrushLineAddedPayload = EntityIdentifierPayload<{
-  brushLine: CanvasBrushLineState | CanvasBrushLineWithPressureState;
+  brushLine:
+    | CanvasBrushLineState
+    | CanvasBrushLineWithPressureState
+    | CanvasSoftBrushLineState
+    | CanvasSoftBrushLineWithPressureState;
 }>;
 export type EntityEraserLineAddedPayload = EntityIdentifierPayload<{
   eraserLine: CanvasEraserLineState | CanvasEraserLineWithPressureState;

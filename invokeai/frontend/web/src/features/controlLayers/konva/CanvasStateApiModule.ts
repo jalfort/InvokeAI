@@ -11,6 +11,8 @@ import { createReduxSubscription, getPrefixedId } from 'features/controlLayers/k
 import {
   selectCanvasSettingsSlice,
   settingsBgColorChanged,
+  settingsBrushHardnessChanged,
+  settingsBrushOpacityChanged,
   settingsBrushWidthChanged,
   settingsEraserWidthChanged,
   settingsFgColorChanged,
@@ -285,6 +287,20 @@ export class CanvasStateApiModule extends CanvasModuleBase {
    */
   setBrushWidth = (width: number) => {
     this.store.dispatch(settingsBrushWidthChanged(width));
+  };
+
+  /**
+   * Sets the brush hardness, pushing state to redux.
+   */
+  setBrushHardness = (hardness: number) => {
+    this.store.dispatch(settingsBrushHardnessChanged(hardness));
+  };
+
+  /**
+   * Sets the brush opacity, pushing state to redux.
+   */
+  setBrushOpacity = (opacity: number) => {
+    this.store.dispatch(settingsBrushOpacityChanged(opacity));
   };
 
   /**

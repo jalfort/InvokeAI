@@ -43,6 +43,14 @@ const zCanvasSettingsState = z.object({
    */
   brushWidth: z.int().gt(0),
   /**
+   * The hardness of the brush tool (0 = fully soft Gaussian, 1 = hard edge).
+   */
+  brushHardness: z.number().min(0).max(1).default(1),
+  /**
+   * The per-stroke opacity of the brush tool (0 = fully transparent, 1 = fully opaque).
+   */
+  brushOpacity: z.number().min(0).max(1).default(1),
+  /**
    * The width of the eraser tool.
    */
   eraserWidth: z.int().gt(0),
@@ -159,6 +167,8 @@ const getInitialState = (): CanvasSettingsState => ({
   dynamicGrid: false,
   invertScrollForToolWidth: false,
   brushWidth: 50,
+  brushHardness: 1,
+  brushOpacity: 1,
   eraserWidth: 50,
   activeColor: 'fgColor',
   bgColor: RGBA_BLACK,
@@ -202,6 +212,12 @@ const slice = createSlice({
     },
     settingsBrushWidthChanged: (state, action: PayloadAction<CanvasSettingsState['brushWidth']>) => {
       state.brushWidth = Math.round(action.payload);
+    },
+    settingsBrushHardnessChanged: (state, action: PayloadAction<CanvasSettingsState['brushHardness']>) => {
+      state.brushHardness = action.payload;
+    },
+    settingsBrushOpacityChanged: (state, action: PayloadAction<CanvasSettingsState['brushOpacity']>) => {
+      state.brushOpacity = action.payload;
     },
     settingsEraserWidthChanged: (state, action: PayloadAction<CanvasSettingsState['eraserWidth']>) => {
       state.eraserWidth = Math.round(action.payload);
@@ -314,6 +330,8 @@ export const {
   settingsDynamicGridToggled,
   settingsShowHUDToggled,
   settingsBrushWidthChanged,
+  settingsBrushHardnessChanged,
+  settingsBrushOpacityChanged,
   settingsEraserWidthChanged,
   settingsActiveColorToggled,
   settingsBgColorChanged,
@@ -392,3 +410,5 @@ export const selectSelectionOverlayOpacity = createCanvasSettingsSelector(
   (settings) => settings.selectionOverlayOpacity
 );
 export const selectSelectionOverlayColor = createCanvasSettingsSelector((settings) => settings.selectionOverlayColor);
+export const selectBrushHardness = createCanvasSettingsSelector((settings) => settings.brushHardness);
+export const selectBrushOpacity = createCanvasSettingsSelector((settings) => settings.brushOpacity);

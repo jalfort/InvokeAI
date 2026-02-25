@@ -9,6 +9,7 @@ import { CanvasObjectEraserLineWithPressure } from 'features/controlLayers/konva
 import { CanvasObjectGradient } from 'features/controlLayers/konva/CanvasObject/CanvasObjectGradient';
 import { CanvasObjectImage } from 'features/controlLayers/konva/CanvasObject/CanvasObjectImage';
 import { CanvasObjectRect } from 'features/controlLayers/konva/CanvasObject/CanvasObjectRect';
+import { CanvasObjectSoftBrushLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectSoftBrushLine';
 import type { AnyObjectRenderer, AnyObjectState } from 'features/controlLayers/konva/CanvasObject/types';
 import { getPrefixedId } from 'features/controlLayers/konva/util';
 import Konva from 'konva';
@@ -126,6 +127,15 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
       }
 
       didRender = this.renderer.update(this.state, true);
+    } else if (this.state.type === 'soft_brush_line' || this.state.type === 'soft_brush_line_with_pressure') {
+      assert(this.renderer instanceof CanvasObjectSoftBrushLine || !this.renderer);
+
+      if (!this.renderer) {
+        this.renderer = new CanvasObjectSoftBrushLine(this.state, this);
+        this.konva.group.add(this.renderer.konva.group);
+      }
+
+      didRender = this.renderer.update(this.state, true);
     } else if (this.state.type === 'eraser_line') {
       assert(this.renderer instanceof CanvasObjectEraserLine || !this.renderer);
 
@@ -238,6 +248,8 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
       switch (this.state.type) {
         case 'brush_line':
         case 'brush_line_with_pressure':
+        case 'soft_brush_line':
+        case 'soft_brush_line_with_pressure':
           this.manager.stateApi.addBrushLine({ entityIdentifier, brushLine: this.state });
           break;
         case 'eraser_line':

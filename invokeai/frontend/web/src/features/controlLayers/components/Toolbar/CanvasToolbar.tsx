@@ -2,6 +2,7 @@ import { Box, Divider, Flex } from '@invoke-ai/ui-library';
 import { CanvasSettingsPopover } from 'features/controlLayers/components/Settings/CanvasSettingsPopover';
 import { TextToolOptions } from 'features/controlLayers/components/Text/TextToolOptions';
 import { useToolIsSelected } from 'features/controlLayers/components/Tool/hooks';
+import { ToolBrushSettings } from 'features/controlLayers/components/Tool/ToolBrushSettings';
 import { ToolFillColorPicker } from 'features/controlLayers/components/Tool/ToolFillColorPicker';
 import { ToolGradientClipToggle } from 'features/controlLayers/components/Tool/ToolGradientClipToggle';
 import { ToolGradientModeToggle } from 'features/controlLayers/components/Tool/ToolGradientModeToggle';
@@ -26,7 +27,7 @@ import { useCanvasToggleNonRasterLayersHotkey } from 'features/controlLayers/hoo
 import { useCanvasTransformHotkey } from 'features/controlLayers/hooks/useCanvasTransformHotkey';
 import { useCanvasUndoRedoHotkeys } from 'features/controlLayers/hooks/useCanvasUndoRedoHotkeys';
 import { useNextPrevEntityHotkeys } from 'features/controlLayers/hooks/useNextPrevEntity';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 
 export const CanvasToolbar = memo(() => {
   const isBrushSelected = useToolIsSelected('brush');
@@ -34,9 +35,6 @@ export const CanvasToolbar = memo(() => {
   const isTextSelected = useToolIsSelected('text');
   const isGradientSelected = useToolIsSelected('gradient');
   const isSelectionSelected = useToolIsSelected('selection');
-  const showToolWithPicker = useMemo(() => {
-    return !isTextSelected && (isBrushSelected || isEraserSelected);
-  }, [isBrushSelected, isEraserSelected, isTextSelected]);
 
   useCanvasResetLayerHotkey();
   useCanvasDeleteLayerHotkey();
@@ -59,7 +57,9 @@ export const CanvasToolbar = memo(() => {
             <ToolGradientModeToggle />
           </Box>
         )}
-        {isTextSelected ? <TextToolOptions /> : showToolWithPicker && <ToolWidthPicker />}
+        {isTextSelected && <TextToolOptions />}
+        {isBrushSelected && <ToolBrushSettings />}
+        {isEraserSelected && <ToolWidthPicker />}
         {isSelectionSelected && <ToolSelectionSettings />}
       </ToolOptionsRowContainer>
       <Flex alignItems="center" h="full">

@@ -11,6 +11,7 @@ import { CanvasObjectEraserLineWithPressure } from 'features/controlLayers/konva
 import { CanvasObjectGradient } from 'features/controlLayers/konva/CanvasObject/CanvasObjectGradient';
 import { CanvasObjectImage } from 'features/controlLayers/konva/CanvasObject/CanvasObjectImage';
 import { CanvasObjectRect } from 'features/controlLayers/konva/CanvasObject/CanvasObjectRect';
+import { CanvasObjectSoftBrushLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectSoftBrushLine';
 import type { AnyObjectRenderer, AnyObjectState } from 'features/controlLayers/konva/CanvasObject/types';
 import { LightnessToAlphaFilter } from 'features/controlLayers/konva/filters';
 import { getPatternSVG } from 'features/controlLayers/konva/patterns/getPatternSVG';
@@ -367,6 +368,16 @@ export class CanvasEntityObjectRenderer extends CanvasModuleBase {
 
       if (!renderer) {
         renderer = new CanvasObjectBrushLineWithPressure(objectState, this);
+        this.renderers.set(renderer.id, renderer);
+        this.konva.objectGroup.add(renderer.konva.group);
+      }
+
+      didRender = renderer.update(objectState, force || isFirstRender);
+    } else if (objectState.type === 'soft_brush_line' || objectState.type === 'soft_brush_line_with_pressure') {
+      assert(renderer instanceof CanvasObjectSoftBrushLine || !renderer);
+
+      if (!renderer) {
+        renderer = new CanvasObjectSoftBrushLine(objectState, this);
         this.renderers.set(renderer.id, renderer);
         this.konva.objectGroup.add(renderer.konva.group);
       }

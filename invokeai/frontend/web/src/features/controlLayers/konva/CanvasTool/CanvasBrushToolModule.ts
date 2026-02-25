@@ -145,15 +145,38 @@ export class CanvasBrushToolModule extends CanvasModuleBase {
     const brushPreviewFill = this.manager.stateApi.getBrushPreviewColor();
     const alignedCursorPos = alignCoordForTool(cursorPos.relative, settings.brushWidth);
     const radius = settings.brushWidth / 2;
+    const fillVisible = !isPrimaryPointerDown && lastPointerType === 'mouse';
 
-    // The circle is scaled
-    this.konva.fillCircle.setAttrs({
-      x: alignedCursorPos.x,
-      y: alignedCursorPos.y,
-      radius,
-      fill: rgbaColorToString(brushPreviewFill),
-      visible: !isPrimaryPointerDown && lastPointerType === 'mouse',
-    });
+    // The circle is scaled — show hardness gradient and opacity on the cursor preview
+    if (settings.brushHardness < 1) {
+      // Soft brush: radial gradient from solid center to transparent edge
+      const solidColor = rgbaColorToString({ ...brushPreviewFill, a: 1 });
+      const transparentColor = rgbaColorToString({ ...brushPreviewFill, a: 0 });
+      this.konva.fillCircle.setAttrs({
+        x: alignedCursorPos.x,
+        y: alignedCursorPos.y,
+        radius,
+        fill: undefined,
+        fillRadialGradientStartPoint: { x: 0, y: 0 },
+        fillRadialGradientEndPoint: { x: 0, y: 0 },
+        fillRadialGradientStartRadius: radius * settings.brushHardness,
+        fillRadialGradientEndRadius: radius,
+        fillRadialGradientColorStops: [0, solidColor, 1, transparentColor],
+        opacity: settings.brushOpacity,
+        visible: fillVisible,
+      });
+    } else {
+      // Hard brush: solid fill (default behavior)
+      this.konva.fillCircle.setAttrs({
+        x: alignedCursorPos.x,
+        y: alignedCursorPos.y,
+        radius,
+        fill: rgbaColorToString(brushPreviewFill),
+        fillRadialGradientColorStops: undefined,
+        opacity: settings.brushOpacity,
+        visible: fillVisible,
+      });
+    }
 
     // But the borders are in screen-pixels
     const onePixel = this.manager.stage.unscale(1);
@@ -267,12 +290,13 @@ export class CanvasBrushToolModule extends CanvasModuleBase {
 
     const normalizedPoint = offsetCoord(cursorPos.relative, selectedEntity.state.position);
     const alignedPoint = alignCoordForTool(normalizedPoint, settings.brushWidth);
+    const isSoft = settings.brushHardness < 1 || settings.brushOpacity < 1;
 
     if (e.evt.pointerType === 'pen' && settings.pressureSensitivity) {
       // We need to get the last point of the last line to create a straight line if shift is held
       const lastLinePoint = getLastPointOfLastLineWithPressure(
         selectedEntity.state.objects,
-        'brush_line_with_pressure'
+        isSoft ? 'soft_brush_line_with_pressure' : 'brush_line_with_pressure'
       );
 
       let points: number[];
@@ -295,18 +319,34 @@ export class CanvasBrushToolModule extends CanvasModuleBase {
         points = [alignedPoint.x, alignedPoint.y, e.evt.pressure];
       }
 
-      await selectedEntity.bufferRenderer.setBuffer({
-        id: getPrefixedId('brush_line_with_pressure'),
-        type: 'brush_line_with_pressure',
-        points,
-        strokeWidth: settings.brushWidth,
-        color: this.manager.stateApi.getCurrentColor(),
-        // When shift is held, the line may extend beyond the clip region. Clip only if we are clipping to bbox. If we
-        // are clipping to stage, we don't need to clip at all.
-        clip: isShiftDraw && !settings.clipToBbox ? null : this.parent.getClip(selectedEntity.state),
-      });
+      const clip = isShiftDraw && !settings.clipToBbox ? null : this.parent.getClip(selectedEntity.state);
+
+      if (isSoft) {
+        await selectedEntity.bufferRenderer.setBuffer({
+          id: getPrefixedId('soft_brush_line_with_pressure'),
+          type: 'soft_brush_line_with_pressure',
+          points,
+          strokeWidth: settings.brushWidth,
+          hardness: settings.brushHardness,
+          opacity: settings.brushOpacity,
+          color: this.manager.stateApi.getCurrentColor(),
+          clip,
+        });
+      } else {
+        await selectedEntity.bufferRenderer.setBuffer({
+          id: getPrefixedId('brush_line_with_pressure'),
+          type: 'brush_line_with_pressure',
+          points,
+          strokeWidth: settings.brushWidth,
+          color: this.manager.stateApi.getCurrentColor(),
+          clip,
+        });
+      }
     } else {
-      const lastLinePoint = getLastPointOfLastLine(selectedEntity.state.objects, 'brush_line');
+      const lastLinePoint = getLastPointOfLastLine(
+        selectedEntity.state.objects,
+        isSoft ? 'soft_brush_line' : 'brush_line'
+      );
 
       let points: number[];
       let isShiftDraw = false;
@@ -320,16 +360,29 @@ export class CanvasBrushToolModule extends CanvasModuleBase {
         points = [alignedPoint.x, alignedPoint.y];
       }
 
-      await selectedEntity.bufferRenderer.setBuffer({
-        id: getPrefixedId('brush_line'),
-        type: 'brush_line',
-        points,
-        strokeWidth: settings.brushWidth,
-        color: this.manager.stateApi.getCurrentColor(),
-        // When shift is held, the line may extend beyond the clip region. Clip only if we are clipping to bbox. If we
-        // are clipping to stage, we don't need to clip at all.
-        clip: isShiftDraw && !settings.clipToBbox ? null : this.parent.getClip(selectedEntity.state),
-      });
+      const clip = isShiftDraw && !settings.clipToBbox ? null : this.parent.getClip(selectedEntity.state);
+
+      if (isSoft) {
+        await selectedEntity.bufferRenderer.setBuffer({
+          id: getPrefixedId('soft_brush_line'),
+          type: 'soft_brush_line',
+          points,
+          strokeWidth: settings.brushWidth,
+          hardness: settings.brushHardness,
+          opacity: settings.brushOpacity,
+          color: this.manager.stateApi.getCurrentColor(),
+          clip,
+        });
+      } else {
+        await selectedEntity.bufferRenderer.setBuffer({
+          id: getPrefixedId('brush_line'),
+          type: 'brush_line',
+          points,
+          strokeWidth: settings.brushWidth,
+          color: this.manager.stateApi.getCurrentColor(),
+          clip,
+        });
+      }
     }
   };
 
@@ -349,7 +402,9 @@ export class CanvasBrushToolModule extends CanvasModuleBase {
     }
     if (
       (selectedEntity.bufferRenderer.state?.type === 'brush_line' ||
-        selectedEntity.bufferRenderer.state?.type === 'brush_line_with_pressure') &&
+        selectedEntity.bufferRenderer.state?.type === 'brush_line_with_pressure' ||
+        selectedEntity.bufferRenderer.state?.type === 'soft_brush_line' ||
+        selectedEntity.bufferRenderer.state?.type === 'soft_brush_line_with_pressure') &&
       selectedEntity.bufferRenderer.hasBuffer()
     ) {
       selectedEntity.bufferRenderer.commitBuffer();
@@ -390,7 +445,12 @@ export class CanvasBrushToolModule extends CanvasModuleBase {
       return;
     }
 
-    if (bufferState.type !== 'brush_line' && bufferState.type !== 'brush_line_with_pressure') {
+    if (
+      bufferState.type !== 'brush_line' &&
+      bufferState.type !== 'brush_line_with_pressure' &&
+      bufferState.type !== 'soft_brush_line' &&
+      bufferState.type !== 'soft_brush_line_with_pressure'
+    ) {
       return;
     }
 
@@ -413,7 +473,11 @@ export class CanvasBrushToolModule extends CanvasModuleBase {
     bufferState.points.push(alignedPoint.x, alignedPoint.y);
 
     // Add pressure if the pen is down and pressure sensitivity is enabled
-    if (bufferState.type === 'brush_line_with_pressure' && settings.pressureSensitivity) {
+    if (
+      (bufferState.type === 'brush_line_with_pressure' ||
+        bufferState.type === 'soft_brush_line_with_pressure') &&
+      settings.pressureSensitivity
+    ) {
       bufferState.points.push(e.evt.pressure);
     }
 
