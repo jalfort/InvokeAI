@@ -16,6 +16,7 @@ import { AddPromptTriggerButton } from 'features/prompt/AddPromptTriggerButton';
 import { PromptPopover } from 'features/prompt/PromptPopover';
 import { usePrompt } from 'features/prompt/usePrompt';
 import { usePromptAttentionHotkeys } from 'features/prompt/usePromptAttentionHotkeys';
+import { PromptOptimizerPopover } from 'features/promptOptimizer/PromptOptimizerPopover';
 import {
   selectStylePresetActivePresetId,
   selectStylePresetViewMode,
@@ -198,6 +199,13 @@ export const ParamPositivePrompt = memo(() => {
     onPromptChange: (prompt) => dispatch(positivePromptChanged(prompt)),
   });
 
+  const onAcceptOptimized = useCallback(
+    (optimizedPrompt: string) => {
+      dispatch(positivePromptChanged(optimizedPrompt));
+    },
+    [dispatch]
+  );
+
   return (
     <Box pos="relative">
       <PromptPopover isOpen={isOpen} onClose={onClose} onSelect={onSelect} width={textareaRef.current?.clientWidth}>
@@ -225,6 +233,7 @@ export const ParamPositivePrompt = memo(() => {
               <AddPromptTriggerButton isOpen={isOpen} onOpen={onOpen} />
               <ShowDynamicPromptsPreviewButton />
               <PositivePromptHistoryIconButton />
+              <PromptOptimizerPopover onAccept={onAcceptOptimized} />
               {modelSupportsNegativePrompt && <NegativePromptToggleButton />}
             </Flex>
           </PromptOverlayButtonWrapper>

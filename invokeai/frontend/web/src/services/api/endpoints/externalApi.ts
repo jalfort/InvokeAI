@@ -1,6 +1,7 @@
 import { api, buildV1Url } from '..';
 
 const buildExternalApiUrl = (path: string = '') => buildV1Url(`external_api/${path}`);
+const buildPromptLibraryUrl = (path: string = '') => buildV1Url(`prompt_library/${path}`);
 
 type ProviderStatus = {
   provider: string;
@@ -49,10 +50,84 @@ type SetKeyResponse = {
   is_configured: boolean;
 };
 
+type DeleteKeyRequest = {
+  provider: string;
+};
+
+type DeleteKeyResponse = {
+  provider: string;
+  is_configured: boolean;
+};
+
 type TestKeyResponse = {
   provider: string;
   is_valid: boolean;
   message: string;
+};
+
+// --- Prompt Optimization Types ---
+
+type TextCapableProvidersResponse = {
+  providers: string[];
+};
+
+type OptimizePromptRequest = {
+  prompt: string;
+  system_prompt: string;
+  provider: string;
+  model?: string | null;
+};
+
+type OptimizePromptResponse = {
+  optimized_prompt: string;
+  provider: string;
+  model: string;
+};
+
+// --- Prompt Library Types ---
+
+export type SystemPromptEntry = {
+  id: string;
+  name: string;
+  system_prompt: string;
+  is_default: boolean;
+  is_locked: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type PromptLibraryListResponse = {
+  prompts: SystemPromptEntry[];
+};
+
+type CreateSystemPromptRequest = {
+  name: string;
+  system_prompt: string;
+};
+
+type UpdateSystemPromptRequest = {
+  id: string;
+  name?: string;
+  system_prompt?: string;
+  is_locked?: boolean;
+};
+
+type DeleteSystemPromptRequest = {
+  id: string;
+};
+
+type RefineSystemPromptRequest = {
+  system_prompt: string;
+  instruction: string;
+  reference_prompt?: string | null;
+  provider: string;
+  model?: string | null;
+};
+
+type RefineSystemPromptResponse = {
+  refined_prompt: string;
+  provider: string;
+  model: string;
 };
 
 export const externalApiEndpoints = api.injectEndpoints({
@@ -79,11 +154,73 @@ export const externalApiEndpoints = api.injectEndpoints({
       }),
       invalidatesTags: ['ExternalApiProviders'],
     }),
+    deleteExternalApiKey: build.mutation<DeleteKeyResponse, DeleteKeyRequest>({
+      query: (body) => ({
+        url: buildExternalApiUrl('delete_key'),
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['ExternalApiProviders'],
+    }),
     testExternalApiKey: build.mutation<TestKeyResponse, string>({
       query: (provider) => ({
         url: buildExternalApiUrl('test_key'),
         method: 'POST',
         body: { provider },
+      }),
+    }),
+    // --- Prompt Optimization ---
+    getTextCapableProviders: build.query<TextCapableProvidersResponse, void>({
+      query: () => ({
+        url: buildExternalApiUrl('text_providers'),
+        method: 'GET',
+      }),
+      providesTags: ['FetchOnReconnect', 'ExternalApiProviders'],
+    }),
+    optimizePrompt: build.mutation<OptimizePromptResponse, OptimizePromptRequest>({
+      query: (body) => ({
+        url: buildExternalApiUrl('optimize_prompt'),
+        method: 'POST',
+        body,
+      }),
+    }),
+    // --- Prompt Library ---
+    getSystemPrompts: build.query<PromptLibraryListResponse, void>({
+      query: () => ({
+        url: buildPromptLibraryUrl('list'),
+        method: 'GET',
+      }),
+      providesTags: ['PromptLibrary'],
+    }),
+    createSystemPrompt: build.mutation<SystemPromptEntry, CreateSystemPromptRequest>({
+      query: (body) => ({
+        url: buildPromptLibraryUrl('create'),
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['PromptLibrary'],
+    }),
+    updateSystemPrompt: build.mutation<SystemPromptEntry, UpdateSystemPromptRequest>({
+      query: (body) => ({
+        url: buildPromptLibraryUrl('update'),
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: ['PromptLibrary'],
+    }),
+    deleteSystemPrompt: build.mutation<{ deleted: boolean; id: string }, DeleteSystemPromptRequest>({
+      query: (body) => ({
+        url: buildPromptLibraryUrl('delete'),
+        method: 'DELETE',
+        body,
+      }),
+      invalidatesTags: ['PromptLibrary'],
+    }),
+    refineSystemPrompt: build.mutation<RefineSystemPromptResponse, RefineSystemPromptRequest>({
+      query: (body) => ({
+        url: buildPromptLibraryUrl('refine'),
+        method: 'POST',
+        body,
       }),
     }),
   }),
@@ -93,5 +230,13 @@ export const {
   useGetExternalApiProvidersQuery,
   useGetExternalApiModelsQuery,
   useSetExternalApiKeyMutation,
+  useDeleteExternalApiKeyMutation,
   useTestExternalApiKeyMutation,
+  useGetTextCapableProvidersQuery,
+  useOptimizePromptMutation,
+  useGetSystemPromptsQuery,
+  useCreateSystemPromptMutation,
+  useUpdateSystemPromptMutation,
+  useDeleteSystemPromptMutation,
+  useRefineSystemPromptMutation,
 } = externalApiEndpoints;

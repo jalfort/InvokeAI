@@ -75,5 +75,32 @@ def _register_builtin_providers() -> None:
     except ImportError:
         log.debug("google-genai not installed, skipping Gemini provider")
 
-    # FAL.ai provider will be registered here after p4.1 refactor
-    # Replicate provider will be registered here after p4.2
+    # OpenAI provider (text-only, prompt optimization)
+    try:
+        from invokeai.app.services.external_providers.openai_provider import OpenAIProvider
+
+        _registry.register(OpenAIProvider())
+        log.debug("Registered OpenAI provider")
+    except ImportError:
+        log.debug("Failed to load OpenAI provider")
+
+    # Anthropic provider (text-only, prompt optimization)
+    try:
+        from invokeai.app.services.external_providers.anthropic_provider import AnthropicProvider
+
+        _registry.register(AnthropicProvider())
+        log.debug("Registered Anthropic provider")
+    except ImportError:
+        log.debug("Failed to load Anthropic provider")
+
+    # OpenRouter provider (text-only, prompt optimization)
+    try:
+        from invokeai.app.services.external_providers.openrouter_provider import OpenRouterProvider
+
+        _registry.register(OpenRouterProvider())
+        log.debug("Registered OpenRouter provider")
+    except ImportError:
+        log.debug("Failed to load OpenRouter provider")
+
+    # FAL.ai provider will be registered here after dynamic API UI implementation
+    # Replicate provider will be registered here after dynamic API UI implementation

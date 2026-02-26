@@ -26,6 +26,7 @@ from invokeai.app.api.routers import (
     images,
     model_manager,
     model_relationships,
+    prompt_library,
     recall_parameters,
     session_queue,
     style_presets,
@@ -140,6 +141,7 @@ app.include_router(style_presets.style_presets_router, prefix="/api")
 app.include_router(client_state.client_state_router, prefix="/api")
 app.include_router(recall_parameters.recall_parameters_router, prefix="/api")
 app.include_router(external_api.external_api_router, prefix="/api")
+app.include_router(prompt_library.prompt_library_router, prefix="/api")
 
 app.openapi = get_openapi_func(app)
 

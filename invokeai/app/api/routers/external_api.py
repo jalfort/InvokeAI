@@ -1,14 +1,21 @@
 """External API provider management endpoints."""
 
+import logging
 from typing import Optional
 
-from fastapi import Body
+from fastapi import Body, HTTPException
 from fastapi.routing import APIRouter
 from pydantic import BaseModel, Field
 
 from invokeai.app.services.config.config_default import get_config
 from invokeai.app.services.external_providers.base import ProviderCapabilities
 from invokeai.app.services.external_providers.registry import get_provider_registry
+from invokeai.app.services.external_providers.text_completion import (
+    TEXT_CAPABLE_PROVIDERS,
+    complete_text,
+)
+
+logger = logging.getLogger("InvokeAI")
 
 external_api_router = APIRouter(prefix="/v1/external_api", tags=["external_api"])
 
@@ -18,7 +25,7 @@ KNOWN_PROVIDERS: dict[str, dict[str, str]] = {
     "fal": {"display_name": "FAL.ai", "capability_type": "image"},
     "gemini": {"display_name": "Google Gemini", "capability_type": "image_text"},
     "replicate": {"display_name": "Replicate", "capability_type": "image"},
-    "openai": {"display_name": "OpenAI", "capability_type": "image_text"},
+    "openai": {"display_name": "OpenAI", "capability_type": "text"},
     "openrouter": {"display_name": "OpenRouter", "capability_type": "text"},
     "anthropic": {"display_name": "Anthropic", "capability_type": "text"},
 }
@@ -69,6 +76,19 @@ class SetKeyResponse(BaseModel):
 
     provider: str = Field(description="Provider that was configured")
     is_configured: bool = Field(description="Whether the key is now set")
+
+
+class DeleteKeyRequest(BaseModel):
+    """Request to delete an API key for a provider."""
+
+    provider: str = Field(description="Provider to remove key for")
+
+
+class DeleteKeyResponse(BaseModel):
+    """Response after deleting an API key."""
+
+    provider: str = Field(description="Provider that was deconfigured")
+    is_configured: bool = Field(description="Whether a key is still set (always False)")
 
 
 class TestKeyRequest(BaseModel):
@@ -198,6 +218,23 @@ async def set_key(body: SetKeyRequest = Body(description="API key to set")) -> S
 
 
 @external_api_router.post(
+    "/delete_key",
+    operation_id="delete_external_api_key",
+    status_code=200,
+    response_model=DeleteKeyResponse,
+)
+async def delete_key(body: DeleteKeyRequest = Body(description="Provider to delete key for")) -> DeleteKeyResponse:
+    """Delete the API key for an external provider.
+
+    Removes the key from the unified api_keys dict and persists the change to invokeai.yaml.
+    """
+    config = get_config()
+    config.api_keys.pop(body.provider, None)
+    config.write_file(config.config_file_path)
+    return DeleteKeyResponse(provider=body.provider, is_configured=False)
+
+
+@external_api_router.post(
     "/test_key",
     operation_id="test_external_api_key",
     status_code=200,
@@ -232,3 +269,86 @@ async def test_key(
         return TestKeyResponse(provider=provider_id, is_valid=is_valid, message=message)
     except Exception as e:
         return TestKeyResponse(provider=provider_id, is_valid=False, message=f"Could not verify key: {e}")
+
+
+# --- Prompt Optimization ---
+
+
+class OptimizePromptRequest(BaseModel):
+    """Request to optimize a prompt using an LLM."""
+
+    prompt: str = Field(description="The user's current prompt to optimize")
+    system_prompt: str = Field(description="System instruction for the optimizer LLM")
+    provider: str = Field(description="Which provider to use for text completion")
+    model: Optional[str] = Field(default=None, description="Override the default model for this provider")
+
+
+class OptimizePromptResponse(BaseModel):
+    """Response with the optimized prompt."""
+
+    optimized_prompt: str = Field(description="The LLM-optimized prompt text")
+    provider: str = Field(description="Provider that was used")
+    model: str = Field(description="Model that was used")
+
+
+class TextCapableProvidersResponse(BaseModel):
+    """List of providers that support text completion for prompt optimization."""
+
+    providers: list[str] = Field(description="Provider IDs that support text completion")
+
+
+@external_api_router.get(
+    "/text_providers",
+    operation_id="get_text_capable_providers",
+    status_code=200,
+    response_model=TextCapableProvidersResponse,
+)
+async def get_text_capable_providers() -> TextCapableProvidersResponse:
+    """Get list of providers that support text completion (for prompt optimization).
+
+    Only returns providers that both support text completion AND have a key configured.
+    """
+    configured = [p for p in TEXT_CAPABLE_PROVIDERS if _is_provider_configured(p)]
+    return TextCapableProvidersResponse(providers=sorted(configured))
+
+
+@external_api_router.post(
+    "/optimize_prompt",
+    operation_id="optimize_prompt",
+    status_code=200,
+    response_model=OptimizePromptResponse,
+)
+async def optimize_prompt(
+    body: OptimizePromptRequest = Body(description="Prompt optimization request"),
+) -> OptimizePromptResponse:
+    """Optimize a prompt using an LLM text completion provider.
+
+    Sends the user's prompt to the selected LLM with the given system prompt,
+    and returns the optimized result.
+    """
+    api_key = _get_provider_key(body.provider)
+    if not api_key:
+        raise HTTPException(status_code=400, detail=f"No API key configured for provider '{body.provider}'.")
+
+    if body.provider not in TEXT_CAPABLE_PROVIDERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Provider '{body.provider}' does not support text completion. Use one of: {sorted(TEXT_CAPABLE_PROVIDERS)}",
+        )
+
+    try:
+        optimized_text, model_used = await complete_text(
+            provider=body.provider,
+            api_key=api_key,
+            system_prompt=body.system_prompt,
+            user_prompt=body.prompt,
+            model=body.model,
+        )
+        return OptimizePromptResponse(
+            optimized_prompt=optimized_text,
+            provider=body.provider,
+            model=model_used,
+        )
+    except Exception as e:
+        logger.error(f"Prompt optimization failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Prompt optimization failed: {e}")

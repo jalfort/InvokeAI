@@ -4,6 +4,7 @@ import type { ChangeEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { PiPlusBold, PiTrashSimpleBold } from 'react-icons/pi';
 import {
+  useDeleteExternalApiKeyMutation,
   useGetExternalApiProvidersQuery,
   useSetExternalApiKeyMutation,
   useTestExternalApiKeyMutation,
@@ -31,12 +32,17 @@ const ConfiguredProviderRow = memo(
     isAvailable: boolean;
   }) => {
     const [testKey, { isLoading: isTesting }] = useTestExternalApiKeyMutation();
+    const [deleteKey, { isLoading: isDeleting }] = useDeleteExternalApiKeyMutation();
     const [testResult, setTestResult] = useState<{ isValid: boolean; message: string } | null>(null);
 
     const onTest = useCallback(async () => {
       const result = await testKey(providerId).unwrap();
       setTestResult({ isValid: result.is_valid, message: result.message });
     }, [providerId, testKey]);
+
+    const onDelete = useCallback(async () => {
+      await deleteKey({ provider: providerId }).unwrap();
+    }, [providerId, deleteKey]);
 
     const capabilityLabel =
       capabilityType === 'image_text' ? 'Image + Text' : capabilityType === 'text' ? 'Text' : 'Image';
@@ -59,6 +65,15 @@ const ConfiguredProviderRow = memo(
           <Button size="xs" variant="ghost" onClick={onTest} isLoading={isTesting}>
             Test
           </Button>
+          <IconButton
+            aria-label="Delete API key"
+            icon={<PiTrashSimpleBold />}
+            size="xs"
+            variant="ghost"
+            colorScheme="error"
+            onClick={onDelete}
+            isLoading={isDeleting}
+          />
         </Flex>
         {testResult && (
           <Badge colorScheme={testResult.isValid ? 'green' : 'red'} variant="subtle" mx={2}>
