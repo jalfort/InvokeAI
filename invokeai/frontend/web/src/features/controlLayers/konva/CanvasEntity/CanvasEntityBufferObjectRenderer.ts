@@ -4,6 +4,7 @@ import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
 import { CanvasObjectBrushLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectBrushLine';
 import { CanvasObjectBrushLineWithPressure } from 'features/controlLayers/konva/CanvasObject/CanvasObjectBrushLineWithPressure';
+import { CanvasObjectCloneBrushLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectCloneBrushLine';
 import { CanvasObjectEraserLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectEraserLine';
 import { CanvasObjectEraserLineWithPressure } from 'features/controlLayers/konva/CanvasObject/CanvasObjectEraserLineWithPressure';
 import { CanvasObjectGradient } from 'features/controlLayers/konva/CanvasObject/CanvasObjectGradient';
@@ -136,6 +137,15 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
       }
 
       didRender = this.renderer.update(this.state, true);
+    } else if (this.state.type === 'clone_brush_line' || this.state.type === 'clone_brush_line_with_pressure') {
+      assert(this.renderer instanceof CanvasObjectCloneBrushLine || !this.renderer);
+
+      if (!this.renderer) {
+        this.renderer = new CanvasObjectCloneBrushLine(this.state, this);
+        this.konva.group.add(this.renderer.konva.group);
+      }
+
+      didRender = this.renderer.update(this.state, true);
     } else if (this.state.type === 'eraser_line') {
       assert(this.renderer instanceof CanvasObjectEraserLine || !this.renderer);
 
@@ -243,9 +253,12 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
     // Move the buffer to the persistent objects group/renderers
     this.parent.renderer.adoptObjectRenderer(this.renderer);
 
-    // Soft brush lines use a custom sceneFunc that doesn't survive Konva's clone().
+    // Soft brush and clone brush lines use a custom sceneFunc that doesn't survive Konva's clone().
     // Bake the stroke canvas into a Konva.Image so it rasterizes/clones correctly.
     if (this.renderer instanceof CanvasObjectSoftBrushLine) {
+      this.renderer.rasterizeToImage();
+    }
+    if (this.renderer instanceof CanvasObjectCloneBrushLine) {
       this.renderer.rasterizeToImage();
     }
 
@@ -256,6 +269,8 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
         case 'brush_line_with_pressure':
         case 'soft_brush_line':
         case 'soft_brush_line_with_pressure':
+        case 'clone_brush_line':
+        case 'clone_brush_line_with_pressure':
           this.manager.stateApi.addBrushLine({ entityIdentifier, brushLine: this.state });
           break;
         case 'eraser_line':

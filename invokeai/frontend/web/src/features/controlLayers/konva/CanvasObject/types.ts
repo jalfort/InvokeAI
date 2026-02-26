@@ -1,5 +1,6 @@
 import type { CanvasObjectBrushLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectBrushLine';
 import type { CanvasObjectBrushLineWithPressure } from 'features/controlLayers/konva/CanvasObject/CanvasObjectBrushLineWithPressure';
+import type { CanvasObjectCloneBrushLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectCloneBrushLine';
 import type { CanvasObjectEraserLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectEraserLine';
 import type { CanvasObjectEraserLineWithPressure } from 'features/controlLayers/konva/CanvasObject/CanvasObjectEraserLineWithPressure';
 import type { CanvasObjectGradient } from 'features/controlLayers/konva/CanvasObject/CanvasObjectGradient';
@@ -9,6 +10,8 @@ import type { CanvasObjectSoftBrushLine } from 'features/controlLayers/konva/Can
 import type {
   CanvasBrushLineState,
   CanvasBrushLineWithPressureState,
+  CanvasCloneBrushLineState,
+  CanvasCloneBrushLineWithPressureState,
   CanvasEraserLineState,
   CanvasEraserLineWithPressureState,
   CanvasGradientState,
@@ -26,6 +29,7 @@ export type AnyObjectRenderer =
   | CanvasObjectBrushLine
   | CanvasObjectBrushLineWithPressure
   | CanvasObjectSoftBrushLine
+  | CanvasObjectCloneBrushLine
   | CanvasObjectEraserLine
   | CanvasObjectEraserLineWithPressure
   | CanvasObjectRect
@@ -39,6 +43,8 @@ export type AnyObjectState =
   | CanvasBrushLineWithPressureState
   | CanvasSoftBrushLineState
   | CanvasSoftBrushLineWithPressureState
+  | CanvasCloneBrushLineState
+  | CanvasCloneBrushLineWithPressureState
   | CanvasEraserLineState
   | CanvasEraserLineWithPressureState
   | CanvasImageState

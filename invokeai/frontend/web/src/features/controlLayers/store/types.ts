@@ -105,7 +105,19 @@ const zIPMethodV2 = z.enum(['full', 'style', 'composition', 'style_strong', 'sty
 export type IPMethodV2 = z.infer<typeof zIPMethodV2>;
 export const isIPMethodV2 = (v: unknown): v is IPMethodV2 => zIPMethodV2.safeParse(v).success;
 
-const _zTool = z.enum(['brush', 'eraser', 'move', 'rect', 'gradient', 'selection', 'view', 'bbox', 'colorPicker', 'text']);
+const _zTool = z.enum([
+  'brush',
+  'eraser',
+  'move',
+  'rect',
+  'gradient',
+  'selection',
+  'view',
+  'bbox',
+  'colorPicker',
+  'text',
+  'cloneBrush',
+]);
 export type Tool = z.infer<typeof _zTool>;
 
 const zPoints = z.array(z.number()).refine((points) => points.length % 2 === 0, {
@@ -258,6 +270,49 @@ const zCanvasSoftBrushLineWithPressureState = z.object({
 });
 export type CanvasSoftBrushLineWithPressureState = z.infer<typeof zCanvasSoftBrushLineWithPressureState>;
 
+const _zCloneBrushSampleMode = z.enum(['current_layer', 'current_and_below']);
+export type CloneBrushSampleMode = z.infer<typeof _zCloneBrushSampleMode>;
+
+const zCanvasCloneBrushLineState = z.object({
+  id: zId,
+  type: z.literal('clone_brush_line'),
+  strokeWidth: z.number().min(1),
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  /**
+   * Points without pressure are in the format [x1, y1, x2, y2, ...]
+   */
+  points: zPoints,
+  clip: zRect.nullable(),
+  /**
+   * Source offset from each destination point to the source sample point.
+   * Fixed for the entire stroke.
+   */
+  sourceOffsetX: z.number(),
+  sourceOffsetY: z.number(),
+});
+export type CanvasCloneBrushLineState = z.infer<typeof zCanvasCloneBrushLineState>;
+
+const zCanvasCloneBrushLineWithPressureState = z.object({
+  id: zId,
+  type: z.literal('clone_brush_line_with_pressure'),
+  strokeWidth: z.number().min(1),
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  /**
+   * Points with pressure are in the format [x1, y1, pressure1, x2, y2, pressure2, ...]
+   */
+  points: zPointsWithPressure,
+  clip: zRect.nullable(),
+  /**
+   * Source offset from each destination point to the source sample point.
+   * Fixed for the entire stroke.
+   */
+  sourceOffsetX: z.number(),
+  sourceOffsetY: z.number(),
+});
+export type CanvasCloneBrushLineWithPressureState = z.infer<typeof zCanvasCloneBrushLineWithPressureState>;
+
 const zCanvasEraserLineState = z.object({
   id: zId,
   type: z.literal('eraser_line'),
@@ -340,6 +395,8 @@ const zCanvasObjectState = z.union([
   zCanvasBrushLineWithPressureState,
   zCanvasSoftBrushLineState,
   zCanvasSoftBrushLineWithPressureState,
+  zCanvasCloneBrushLineState,
+  zCanvasCloneBrushLineWithPressureState,
   zCanvasEraserLineState,
   zCanvasEraserLineWithPressureState,
   zCanvasRectState,
@@ -955,7 +1012,9 @@ export type EntityBrushLineAddedPayload = EntityIdentifierPayload<{
     | CanvasBrushLineState
     | CanvasBrushLineWithPressureState
     | CanvasSoftBrushLineState
-    | CanvasSoftBrushLineWithPressureState;
+    | CanvasSoftBrushLineWithPressureState
+    | CanvasCloneBrushLineState
+    | CanvasCloneBrushLineWithPressureState;
 }>;
 export type EntityEraserLineAddedPayload = EntityIdentifierPayload<{
   eraserLine: CanvasEraserLineState | CanvasEraserLineWithPressureState;

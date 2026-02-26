@@ -2590,7 +2590,13 @@
             "view": "View",
             "colorPicker": "Color Picker",
             "text": "Text",
-            "selection": "Selection"
+            "selection": "Selection",
+            "cloneBrush": "Clone Brush"
+        },
+        "cloneBrush": {
+            "aligned": "Aligned Mode",
+            "currentLayer": "Current Layer",
+            "currentAndBelow": "Current & Below"
         },
         "text": {
             "font": "Font",

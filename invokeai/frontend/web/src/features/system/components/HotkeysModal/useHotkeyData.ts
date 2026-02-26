@@ -113,6 +113,7 @@ export const useHotkeyData = (): HotkeysData => {
     // Canvas
     addHotkey('canvas', 'selectBrushTool', ['b']);
     addHotkey('canvas', 'selectBboxTool', ['c']);
+    addHotkey('canvas', 'selectCloneBrushTool', ['j']);
     addHotkey('canvas', 'decrementToolWidth', ['[']);
     addHotkey('canvas', 'incrementToolWidth', [']']);
     addHotkey('canvas', 'selectEraserTool', ['e']);

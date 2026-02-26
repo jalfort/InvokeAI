@@ -9,6 +9,7 @@ import { CanvasMoveToolModule } from 'features/controlLayers/konva/CanvasTool/Ca
 import { CanvasRectToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasRectToolModule';
 import { CanvasSelectionToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasSelectionToolModule';
 import { CanvasTextToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasTextToolModule';
+import { CanvasToolCloneBrushModule } from 'features/controlLayers/konva/CanvasTool/CanvasToolCloneBrushModule';
 import { CanvasViewToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasViewToolModule';
 import {
   calculateNewBrushSizeFromWheelDelta,
@@ -64,6 +65,7 @@ export class CanvasToolModule extends CanvasModuleBase {
 
   tools: {
     brush: CanvasBrushToolModule;
+    cloneBrush: CanvasToolCloneBrushModule;
     eraser: CanvasEraserToolModule;
     rect: CanvasRectToolModule;
     gradient: CanvasGradientToolModule;
@@ -124,6 +126,7 @@ export class CanvasToolModule extends CanvasModuleBase {
 
     this.tools = {
       brush: new CanvasBrushToolModule(this),
+      cloneBrush: new CanvasToolCloneBrushModule(this),
       eraser: new CanvasEraserToolModule(this),
       rect: new CanvasRectToolModule(this),
       gradient: new CanvasGradientToolModule(this),
@@ -141,6 +144,7 @@ export class CanvasToolModule extends CanvasModuleBase {
     };
 
     this.konva.group.add(this.tools.brush.konva.group);
+    this.konva.group.add(this.tools.cloneBrush.konva.group);
     this.konva.group.add(this.tools.eraser.konva.group);
     this.konva.group.add(this.tools.colorPicker.konva.group);
     this.konva.group.add(this.tools.text.konva.group);
@@ -209,6 +213,8 @@ export class CanvasToolModule extends CanvasModuleBase {
         stage.setCursor('not-allowed');
       } else if (tool === 'brush') {
         this.tools.brush.syncCursorStyle();
+      } else if (tool === 'cloneBrush') {
+        this.tools.cloneBrush.syncCursorStyle();
       } else if (tool === 'eraser') {
         this.tools.eraser.syncCursorStyle();
       } else if (tool === 'move') {
@@ -234,6 +240,7 @@ export class CanvasToolModule extends CanvasModuleBase {
     this.syncCursorStyle();
 
     this.tools.brush.render();
+    this.tools.cloneBrush.render();
     this.tools.eraser.render();
     this.tools.colorPicker.render();
     this.tools.text.render();
@@ -390,6 +397,8 @@ export class CanvasToolModule extends CanvasModuleBase {
 
       if (tool === 'brush') {
         await this.tools.brush.onStagePointerEnter(e);
+      } else if (tool === 'cloneBrush') {
+        await this.tools.cloneBrush.onStagePointerEnter(e);
       } else if (tool === 'eraser') {
         await this.tools.eraser.onStagePointerEnter(e);
       } else if (tool === 'text') {
@@ -428,6 +437,8 @@ export class CanvasToolModule extends CanvasModuleBase {
 
       if (tool === 'brush') {
         await this.tools.brush.onStagePointerDown(e);
+      } else if (tool === 'cloneBrush') {
+        await this.tools.cloneBrush.onStagePointerDown(e);
       } else if (tool === 'eraser') {
         await this.tools.eraser.onStagePointerDown(e);
       } else if (tool === 'rect') {
@@ -468,6 +479,8 @@ export class CanvasToolModule extends CanvasModuleBase {
 
       if (tool === 'brush') {
         this.tools.brush.onStagePointerUp(e);
+      } else if (tool === 'cloneBrush') {
+        this.tools.cloneBrush.onStagePointerUp(e);
       } else if (tool === 'eraser') {
         this.tools.eraser.onStagePointerUp(e);
       } else if (tool === 'rect') {
@@ -509,6 +522,8 @@ export class CanvasToolModule extends CanvasModuleBase {
 
       if (tool === 'brush') {
         await this.tools.brush.onStagePointerMove(e);
+      } else if (tool === 'cloneBrush') {
+        await this.tools.cloneBrush.onStagePointerMove(e);
       } else if (tool === 'eraser') {
         await this.tools.eraser.onStagePointerMove(e);
       } else if (tool === 'rect') {
@@ -595,7 +610,7 @@ export class CanvasToolModule extends CanvasModuleBase {
     }
 
     // Holding ctrl or meta while scrolling changes the brush size
-    if (tool === 'brush') {
+    if (tool === 'brush' || tool === 'cloneBrush') {
       this.manager.stateApi.setBrushWidth(calculateNewBrushSizeFromWheelDelta(settings.brushWidth, delta));
     } else if (tool === 'eraser') {
       this.manager.stateApi.setEraserWidth(calculateNewBrushSizeFromWheelDelta(settings.eraserWidth, delta));
@@ -736,6 +751,11 @@ export class CanvasToolModule extends CanvasModuleBase {
         e.preventDefault();
         return;
       }
+      // Don't switch to color picker when clone brush is active (Alt used for source selection)
+      if (this.$tool.get() === 'cloneBrush') {
+        e.preventDefault();
+        return;
+      }
       // Select the color picker on alt key down
       e.preventDefault();
       this.$toolBuffer.set(this.$tool.get());
@@ -777,6 +797,10 @@ export class CanvasToolModule extends CanvasModuleBase {
       if (this.$tool.get() === 'selection') {
         return;
       }
+      // Don't revert if clone brush is active (Alt used for source selection)
+      if (this.$tool.get() === 'cloneBrush') {
+        return;
+      }
       // Revert the tool to the previous tool on alt key up
       e.preventDefault();
       this.revertToolBuffer();
@@ -815,6 +839,7 @@ export class CanvasToolModule extends CanvasModuleBase {
       $lastPointerType: this.$lastPointerType.get(),
       tools: {
         brush: this.tools.brush.repr(),
+        cloneBrush: this.tools.cloneBrush.repr(),
         eraser: this.tools.eraser.repr(),
         colorPicker: this.tools.colorPicker.repr(),
         rect: this.tools.rect.repr(),

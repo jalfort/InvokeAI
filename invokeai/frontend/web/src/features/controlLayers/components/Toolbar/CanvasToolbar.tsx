@@ -3,6 +3,7 @@ import { CanvasSettingsPopover } from 'features/controlLayers/components/Setting
 import { TextToolOptions } from 'features/controlLayers/components/Text/TextToolOptions';
 import { useToolIsSelected } from 'features/controlLayers/components/Tool/hooks';
 import { ToolBrushSettings } from 'features/controlLayers/components/Tool/ToolBrushSettings';
+import { ToolCloneBrushSettings } from 'features/controlLayers/components/Tool/ToolCloneBrushSettings';
 import { ToolFillColorPicker } from 'features/controlLayers/components/Tool/ToolFillColorPicker';
 import { ToolGradientClipToggle } from 'features/controlLayers/components/Tool/ToolGradientClipToggle';
 import { ToolGradientModeToggle } from 'features/controlLayers/components/Tool/ToolGradientModeToggle';
@@ -31,6 +32,7 @@ import { memo } from 'react';
 
 export const CanvasToolbar = memo(() => {
   const isBrushSelected = useToolIsSelected('brush');
+  const isCloneBrushSelected = useToolIsSelected('cloneBrush');
   const isEraserSelected = useToolIsSelected('eraser');
   const isTextSelected = useToolIsSelected('text');
   const isGradientSelected = useToolIsSelected('gradient');
@@ -59,6 +61,7 @@ export const CanvasToolbar = memo(() => {
         )}
         {isTextSelected && <TextToolOptions />}
         {isBrushSelected && <ToolBrushSettings />}
+        {isCloneBrushSelected && <ToolCloneBrushSettings />}
         {isEraserSelected && <ToolWidthPicker />}
         {isSelectionSelected && <ToolSelectionSettings />}
       </ToolOptionsRowContainer>

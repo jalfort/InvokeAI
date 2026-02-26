@@ -222,21 +222,22 @@ export const ToolWidthPicker = memo(() => {
   const ref = useRef<HTMLDivElement>(null);
   const dispatch = useAppDispatch();
   const isBrushSelected = useToolIsSelected('brush');
+  const isCloneBrushSelected = useToolIsSelected('cloneBrush');
   const isEraserSelected = useToolIsSelected('eraser');
   const isToolSelected = useMemo(() => {
-    return isBrushSelected || isEraserSelected;
-  }, [isBrushSelected, isEraserSelected]);
+    return isBrushSelected || isCloneBrushSelected || isEraserSelected;
+  }, [isBrushSelected, isCloneBrushSelected, isEraserSelected]);
   const brushWidth = useAppSelector(selectBrushWidth);
   const eraserWidth = useAppSelector(selectEraserWidth);
   const width = useMemo(() => {
-    if (isBrushSelected) {
+    if (isBrushSelected || isCloneBrushSelected) {
       return brushWidth;
     }
     if (isEraserSelected) {
       return eraserWidth;
     }
     return 0;
-  }, [isBrushSelected, isEraserSelected, brushWidth, eraserWidth]);
+  }, [isBrushSelected, isCloneBrushSelected, isEraserSelected, brushWidth, eraserWidth]);
   const [localValue, setLocalValue] = useState(width);
   const [componentType, setComponentType] = useState<'slider' | 'dropdown' | null>(null);
   const isTypingRef = useRef(false);
@@ -265,13 +266,13 @@ export const ToolWidthPicker = memo(() => {
 
   const onValueChange = useCallback(
     (value: number) => {
-      if (isBrushSelected) {
+      if (isBrushSelected || isCloneBrushSelected) {
         dispatch(settingsBrushWidthChanged(value));
       } else if (isEraserSelected) {
         dispatch(settingsEraserWidthChanged(value));
       }
     },
-    [isBrushSelected, isEraserSelected, dispatch]
+    [isBrushSelected, isCloneBrushSelected, isEraserSelected, dispatch]
   );
 
   const onChange = useCallback(

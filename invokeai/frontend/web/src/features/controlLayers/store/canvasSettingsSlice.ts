@@ -145,6 +145,14 @@ const zCanvasSettingsState = z.object({
    */
   selectionFeatherDirection: zSelectionFeatherDirection.default('both'),
   /**
+   * Whether the clone brush uses aligned mode (offset persists across strokes).
+   */
+  cloneBrushAlignedMode: z.boolean().default(true),
+  /**
+   * The clone brush sampling mode: current layer only, or current layer and all visible layers below.
+   */
+  cloneBrushSampleMode: z.enum(['current_layer', 'current_and_below']).default('current_layer'),
+  /**
    * The opacity of the selection overlay (0-1).
    */
   selectionOverlayOpacity: z.number().min(0).max(1).default(0.5),
@@ -190,6 +198,8 @@ const getInitialState = (): CanvasSettingsState => ({
   transformSmoothingMode: 'bicubic',
   gradientType: 'linear',
   gradientClipEnabled: true,
+  cloneBrushAlignedMode: true,
+  cloneBrushSampleMode: 'current_layer',
   selectionMode: 'rectangle',
   selectionFeatherRadius: 0,
   selectionFeatherDirection: 'both',
@@ -298,6 +308,15 @@ const slice = createSlice({
     settingsGradientClipToggled: (state) => {
       state.gradientClipEnabled = !state.gradientClipEnabled;
     },
+    settingsCloneBrushAlignedModeToggled: (state) => {
+      state.cloneBrushAlignedMode = !state.cloneBrushAlignedMode;
+    },
+    settingsCloneBrushSampleModeChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['cloneBrushSampleMode']>
+    ) => {
+      state.cloneBrushSampleMode = action.payload;
+    },
     settingsSelectionModeChanged: (state, action: PayloadAction<CanvasSettingsState['selectionMode']>) => {
       state.selectionMode = action.payload;
     },
@@ -355,6 +374,8 @@ export const {
   settingsFillColorPickerPinnedSet,
   settingsGradientTypeChanged,
   settingsGradientClipToggled,
+  settingsCloneBrushAlignedModeToggled,
+  settingsCloneBrushSampleModeChanged,
   settingsSelectionModeChanged,
   settingsSelectionFeatherRadiusChanged,
   settingsSelectionFeatherDirectionChanged,
@@ -412,3 +433,5 @@ export const selectSelectionOverlayOpacity = createCanvasSettingsSelector(
 export const selectSelectionOverlayColor = createCanvasSettingsSelector((settings) => settings.selectionOverlayColor);
 export const selectBrushHardness = createCanvasSettingsSelector((settings) => settings.brushHardness);
 export const selectBrushOpacity = createCanvasSettingsSelector((settings) => settings.brushOpacity);
+export const selectCloneBrushAlignedMode = createCanvasSettingsSelector((settings) => settings.cloneBrushAlignedMode);
+export const selectCloneBrushSampleMode = createCanvasSettingsSelector((settings) => settings.cloneBrushSampleMode);

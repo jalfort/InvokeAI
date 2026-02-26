@@ -6,6 +6,7 @@ import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
 import { CanvasObjectBrushLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectBrushLine';
 import { CanvasObjectBrushLineWithPressure } from 'features/controlLayers/konva/CanvasObject/CanvasObjectBrushLineWithPressure';
+import { CanvasObjectCloneBrushLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectCloneBrushLine';
 import { CanvasObjectEraserLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectEraserLine';
 import { CanvasObjectEraserLineWithPressure } from 'features/controlLayers/konva/CanvasObject/CanvasObjectEraserLineWithPressure';
 import { CanvasObjectGradient } from 'features/controlLayers/konva/CanvasObject/CanvasObjectGradient';
@@ -383,6 +384,16 @@ export class CanvasEntityObjectRenderer extends CanvasModuleBase {
       }
 
       didRender = renderer.update(objectState, force || isFirstRender);
+    } else if (objectState.type === 'clone_brush_line' || objectState.type === 'clone_brush_line_with_pressure') {
+      assert(renderer instanceof CanvasObjectCloneBrushLine || !renderer);
+
+      if (!renderer) {
+        renderer = new CanvasObjectCloneBrushLine(objectState, this);
+        this.renderers.set(renderer.id, renderer);
+        this.konva.objectGroup.add(renderer.konva.group);
+      }
+
+      didRender = renderer.update(objectState, force || isFirstRender);
     } else if (objectState.type === 'eraser_line') {
       assert(renderer instanceof CanvasObjectEraserLine || !renderer);
 
@@ -458,7 +469,9 @@ export class CanvasEntityObjectRenderer extends CanvasModuleBase {
       const isImage = renderer instanceof CanvasObjectImage;
       const imageIgnoresTransparency = isImage && renderer.state.usePixelBbox === false;
       const hasClip =
-        (renderer instanceof CanvasObjectBrushLine || renderer instanceof CanvasObjectSoftBrushLine) &&
+        (renderer instanceof CanvasObjectBrushLine ||
+          renderer instanceof CanvasObjectSoftBrushLine ||
+          renderer instanceof CanvasObjectCloneBrushLine) &&
         renderer.state.clip;
       if (isEraserLine || hasClip || (isImage && !imageIgnoresTransparency)) {
         needsPixelBbox = true;

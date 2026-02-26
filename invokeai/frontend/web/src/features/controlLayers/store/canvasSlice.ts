@@ -1521,7 +1521,7 @@ const slice = createSlice({
         ...brushLine,
         // If the brush line is not pressure sensitive, we simplify the points to reduce the size of the state
         points:
-          brushLine.type === 'brush_line' || brushLine.type === 'soft_brush_line'
+          brushLine.type === 'brush_line' || brushLine.type === 'soft_brush_line' || brushLine.type === 'clone_brush_line'
             ? simplifyFlatNumbersArray(brushLine.points)
             : brushLine.points,
       });
