@@ -81,6 +81,7 @@ class BaseProvider(ABC):
         ref_images: list[Image.Image],
         api_key: str,
         progress_cb: Optional[ProgressCallback] = None,
+        dynamic_images: Optional[dict[str, list[Image.Image]]] = None,
     ) -> list[ImageResult]:
         """Generate images from a text prompt with optional reference images.
 
@@ -91,6 +92,8 @@ class BaseProvider(ABC):
             ref_images: Optional PIL reference images for style/content guidance.
             api_key: The API key for this provider.
             progress_cb: Optional callback for progress updates (message, 0.0-1.0).
+            dynamic_images: Schema-driven image inputs keyed by field name.
+                Each value is a list of PIL images to upload and attach to the API call.
 
         Returns:
             List of ImageResult with PIL images and metadata.
@@ -106,6 +109,7 @@ class BaseProvider(ABC):
         params: GenerateParams,
         api_key: str,
         progress_cb: Optional[ProgressCallback] = None,
+        dynamic_images: Optional[dict[str, list[Image.Image]]] = None,
     ) -> list[ImageResult]:
         """Edit/transform existing images based on a prompt.
 
@@ -116,6 +120,7 @@ class BaseProvider(ABC):
             params: Generation parameters.
             api_key: The API key for this provider.
             progress_cb: Optional callback for progress updates.
+            dynamic_images: Schema-driven image inputs keyed by field name.
 
         Returns:
             List of ImageResult with edited PIL images and metadata.

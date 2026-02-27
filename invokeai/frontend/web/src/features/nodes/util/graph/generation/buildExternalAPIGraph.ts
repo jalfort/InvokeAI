@@ -8,6 +8,21 @@ import type { GraphBuilderArg, GraphBuilderReturn } from 'features/nodes/util/gr
 
 const log = logger('system');
 
+/** Convert dynamic image param names (string[]) to ImageField arrays for the backend. */
+function buildDynamicImageParams(
+  params: Record<string, string[]>
+): Record<string, { image_name: string }[]> | undefined {
+  const result: Record<string, { image_name: string }[]> = {};
+  let hasAny = false;
+  for (const [key, names] of Object.entries(params)) {
+    if (names.length > 0) {
+      result[key] = names.map((name) => ({ image_name: name }));
+      hasAny = true;
+    }
+  }
+  return hasAny ? result : undefined;
+}
+
 export const buildExternalAPIGraph = async (arg: GraphBuilderArg): Promise<GraphBuilderReturn> => {
   const { state, manager, preCompositedCanvas } = arg;
   const externalApi = selectExternalApiSlice(state);
@@ -98,6 +113,8 @@ export const buildExternalAPIGraph = async (arg: GraphBuilderArg): Promise<Graph
     enable_web_search: externalApi.enableWebSearch,
     output_format: externalApi.outputFormat,
     safety_tolerance: externalApi.safetyTolerance,
+    dynamic_params: externalApi.dynamicParams,
+    dynamic_image_params: buildDynamicImageParams(externalApi.dynamicImageParams),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
 

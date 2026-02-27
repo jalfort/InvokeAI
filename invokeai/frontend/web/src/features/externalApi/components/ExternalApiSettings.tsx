@@ -1,15 +1,22 @@
 import type { ComboboxOnChange, ComboboxOption } from '@invoke-ai/ui-library';
 import {
   Badge,
+  Button,
   Combobox,
   CompositeNumberInput,
   Flex,
   FormControl,
   FormLabel,
+  IconButton,
+  Input,
   Switch,
   Text,
+  Tooltip,
 } from '@invoke-ai/ui-library';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
+import type { GroupBase } from 'chakra-react-select';
+import { AddEndpointModal } from 'features/externalApi/components/AddEndpointModal';
+import { DynamicSchemaSettings } from 'features/externalApi/components/DynamicSchemaSettings';
 import { ExternalApiReferenceImages } from 'features/externalApi/components/ExternalApiReferenceImages';
 import { useExternalApiAutoMode } from 'features/externalApi/hooks/useExternalApiAutoMode';
 import type {
@@ -17,6 +24,7 @@ import type {
   ExternalApiGenerationMode,
   ExternalApiOutputFormat,
   ExternalApiResolution,
+  ExternalApiSortBy,
 } from 'features/externalApi/store/externalApiSlice';
 import {
   externalApiAspectRatioChanged,
@@ -26,6 +34,7 @@ import {
   externalApiProviderChanged,
   externalApiResolutionChanged,
   externalApiSafetyToleranceChanged,
+  externalApiSortByChanged,
   externalApiWebSearchToggled,
   selectExternalApiAspectRatio,
   selectExternalApiEnableWebSearch,
@@ -36,10 +45,29 @@ import {
   selectExternalApiProviderId,
   selectExternalApiResolution,
   selectExternalApiSafetyTolerance,
+  selectExternalApiSortBy,
 } from 'features/externalApi/store/externalApiSlice';
-import type { ChangeEvent } from 'react';
-import { memo, useCallback, useMemo } from 'react';
-import { useGetExternalApiModelsQuery, useGetExternalApiProvidersQuery } from 'services/api/endpoints/externalApi';
+import type { ChangeEvent, KeyboardEvent } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  PiArrowsClockwiseBold,
+  PiFloppyDiskBold,
+  PiPlusBold,
+  PiTrashSimpleBold,
+  PiXBold,
+} from 'react-icons/pi';
+import {
+  useDeleteDynamicEndpointMutation,
+  useGetDynamicEndpointsQuery,
+  useGetExternalApiModelsQuery,
+  useGetExternalApiProvidersQuery,
+  useRefreshDynamicEndpointMutation,
+  useRenameDynamicEndpointMutation,
+} from 'services/api/endpoints/externalApi';
+
+/** Sentinel value for the "Add Endpoint..." option in the model dropdown. */
+const ADD_ENDPOINT_VALUE = '__add_endpoint__';
 
 const ASPECT_RATIO_OPTIONS: ComboboxOption[] = [
   { value: 'auto', label: 'Auto' },
@@ -71,7 +99,21 @@ const FALLBACK_MODEL_OPTIONS: ComboboxOption[] = [
   { value: 'fal-ai/flux-pro/kontext/max', label: 'Flux Kontext Max' },
 ];
 
+const SORT_OPTIONS: ComboboxOption[] = [
+  { value: 'provider', label: 'Provider' },
+  { value: 'api_category', label: 'API Category' },
+  { value: 'user_category', label: 'My Categories' },
+];
+
+/** Provider display order — hardcoded providers first. */
+const PROVIDER_ORDER: Record<string, number> = {
+  gemini: 0,
+  fal: 1,
+  replicate: 2,
+};
+
 export const ExternalApiSettings = memo(() => {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   useExternalApiAutoMode();
   const providerId = useAppSelector(selectExternalApiProviderId);
@@ -83,61 +125,130 @@ export const ExternalApiSettings = memo(() => {
   const enableWebSearch = useAppSelector(selectExternalApiEnableWebSearch);
   const safetyTolerance = useAppSelector(selectExternalApiSafetyTolerance);
   const outputFormat = useAppSelector(selectExternalApiOutputFormat);
+  const sortBy = useAppSelector(selectExternalApiSortBy);
 
   const { data: modelsData } = useGetExternalApiModelsQuery();
   const { data: providersData } = useGetExternalApiProvidersQuery();
+  const { data: endpointsData } = useGetDynamicEndpointsQuery();
 
-  // Build unique model options from backend (deduplicated by model name across providers)
-  const modelOptions = useMemo((): ComboboxOption[] => {
+  // Add endpoint modal state
+  const [isAddEndpointOpen, setIsAddEndpointOpen] = useState(false);
+  const openAddEndpoint = useCallback(() => setIsAddEndpointOpen(true), []);
+  const closeAddEndpoint = useCallback(() => setIsAddEndpointOpen(false), []);
+
+  // Rename state for dynamic endpoints
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  const [renameEndpoint] = useRenameDynamicEndpointMutation();
+  const [deleteEndpoint] = useDeleteDynamicEndpointMutation();
+  const [refreshEndpoint, { isLoading: isRefreshing }] = useRefreshDynamicEndpointMutation();
+
+  // Check if selected model is dynamic
+  const selectedModelEntry = useMemo(() => {
     if (!modelsData?.models.length) {
-      return FALLBACK_MODEL_OPTIONS;
+      return null;
     }
-    // Group by model name to get unique models
-    const seen = new Set<string>();
-    const options: ComboboxOption[] = [];
-    for (const model of modelsData.models) {
-      if (!seen.has(model.name)) {
-        seen.add(model.name);
-        options.push({ value: model.id, label: model.name });
+    return modelsData.models.find((m) => m.id === modelId) ?? null;
+  }, [modelsData, modelId]);
+
+  const isDynamic = selectedModelEntry?.is_dynamic ?? false;
+
+  // Find the dynamic endpoint for the selected model
+  const selectedEndpoint = useMemo(() => {
+    if (!isDynamic || !endpointsData?.endpoints.length) {
+      return null;
+    }
+    return endpointsData.endpoints.find((ep) => ep.endpoint_id === modelId) ?? null;
+  }, [isDynamic, endpointsData, modelId]);
+
+  // Build a lookup from endpoint_id → DynamicEndpoint for sorting by category
+  const endpointLookup = useMemo(() => {
+    const map = new Map<string, { api_category: string; user_category: string }>();
+    if (endpointsData?.endpoints) {
+      for (const ep of endpointsData.endpoints) {
+        map.set(ep.endpoint_id, { api_category: ep.api_category, user_category: ep.user_category });
       }
     }
-    return options.length > 0 ? options : FALLBACK_MODEL_OPTIONS;
-  }, [modelsData]);
+    return map;
+  }, [endpointsData]);
 
-  // Build provider options for the currently selected model
-  const providerOptions = useMemo((): ComboboxOption[] => {
-    if (!modelsData?.models.length || !providersData?.providers.length) {
-      return [{ value: 'fal', label: 'FAL.ai' }];
+  // Build grouped model options sorted by the user's preferred sort order
+  const modelOptions = useMemo((): GroupBase<ComboboxOption>[] => {
+    if (!modelsData?.models.length) {
+      return [{ label: '', options: FALLBACK_MODEL_OPTIONS }];
     }
 
-    // Find all providers that serve a model with the same name as the selected model
-    const selectedModel = modelsData.models.find((m) => m.id === modelId);
-    const selectedModelName = selectedModel?.name;
+    // Build model entries with group keys and display labels
+    type ModelEntry = { id: string; name: string; providerId: string; providerLabel: string; groupKey: string; groupLabel: string };
+    const entries: ModelEntry[] = [];
+    for (const model of modelsData.models) {
+      const providerInfo = providersData?.providers.find((p) => p.provider === model.provider_id);
+      const providerLabel = providerInfo?.display_name ?? model.provider_id;
+      const epInfo = endpointLookup.get(model.id);
 
-    // Get all providers that serve this model (by name, since model IDs differ per provider)
-    const matchingModels = selectedModelName
-      ? modelsData.models.filter((m) => m.name === selectedModelName)
-      : modelsData.models.filter((m) => m.id === modelId);
+      let groupKey: string;
+      let groupLabel: string;
+      if (sortBy === 'api_category') {
+        groupKey = epInfo?.api_category || model.provider_id;
+        groupLabel = epInfo?.api_category || providerLabel;
+      } else if (sortBy === 'user_category') {
+        groupKey = epInfo?.user_category || epInfo?.api_category || model.provider_id;
+        groupLabel = epInfo?.user_category || epInfo?.api_category || providerLabel;
+      } else {
+        // Sort by provider — use provider_id as key, display_name as label
+        groupKey = model.provider_id;
+        groupLabel = providerLabel;
+      }
 
-    const providerIds = new Set(matchingModels.map((m) => m.provider_id));
-    const configuredProviders = new Set(providersData.providers.filter((p) => p.is_configured).map((p) => p.provider));
+      entries.push({ id: model.id, name: model.name, providerId: model.provider_id, providerLabel, groupKey, groupLabel });
+    }
 
-    return Array.from(providerIds).map((pid) => {
-      const providerInfo = providersData.providers.find((p) => p.provider === pid);
-      const isConfigured = configuredProviders.has(pid);
-      return {
-        value: pid,
-        label: isConfigured ? (providerInfo?.display_name ?? pid) : `${providerInfo?.display_name ?? pid} (no key)`,
-      };
+    // Group entries
+    const groups: Record<string, { label: string; entries: ModelEntry[] }> = {};
+    for (const entry of entries) {
+      const group = groups[entry.groupKey];
+      if (group) {
+        group.entries.push(entry);
+      } else {
+        groups[entry.groupKey] = { label: entry.groupLabel, entries: [entry] };
+      }
+    }
+
+    // Sort groups
+    const sortedGroups = Object.entries(groups).sort(([a], [b]) => {
+      if (sortBy === 'provider') {
+        const orderA = PROVIDER_ORDER[a] ?? 99;
+        const orderB = PROVIDER_ORDER[b] ?? 99;
+        return orderA - orderB;
+      }
+      // Alphabetical for category sorts
+      return a.localeCompare(b);
     });
-  }, [modelsData, providersData, modelId]);
+
+    // Build GroupBase array
+    const grouped: GroupBase<ComboboxOption>[] = sortedGroups.map(([, group]) => ({
+      label: group.label,
+      options: group.entries.map((entry) => ({
+        value: entry.id,
+        label: entry.name,
+      })),
+    }));
+
+    // Add sentinel group at the bottom
+    grouped.push({
+      label: '',
+      options: [{ value: ADD_ENDPOINT_VALUE, label: `+ ${t('externalApi.addEndpoint')}` }],
+    });
+
+    return grouped;
+  }, [modelsData, providersData, endpointLookup, sortBy, t]);
 
   // Get capabilities for current provider+model to show/hide params
   const capabilities = useMemo(() => {
     if (!modelsData?.models.length) {
       return null;
     }
-    // Find the model entry for the current provider
     const model = modelsData.models.find((m) => m.provider_id === providerId && m.id === modelId);
     return model?.capabilities ?? null;
   }, [modelsData, providerId, modelId]);
@@ -165,10 +276,9 @@ export const ExternalApiSettings = memo(() => {
     [modeSource, generationMode]
   );
 
-  const modelValue = useMemo(() => modelOptions.find((o) => o.value === modelId) ?? null, [modelOptions, modelId]);
-  const providerValue = useMemo(
-    () => providerOptions.find((o) => o.value === providerId) ?? null,
-    [providerOptions, providerId]
+  const modelValue = useMemo(
+    () => modelOptions.flatMap((g) => g.options).find((o) => o.value === modelId) ?? null,
+    [modelOptions, modelId]
   );
   const modeValue = useMemo(
     () => modeOptions.find((o) => o.value === generationMode) ?? null,
@@ -186,10 +296,19 @@ export const ExternalApiSettings = memo(() => {
     () => OUTPUT_FORMAT_OPTIONS.find((o) => o.value === outputFormat) ?? null,
     [outputFormat]
   );
+  const sortValue = useMemo(
+    () => SORT_OPTIONS.find((o) => o.value === sortBy) ?? SORT_OPTIONS[0]!,
+    [sortBy]
+  );
 
   const onModelChange = useCallback<ComboboxOnChange>(
     (v) => {
       if (!v) {
+        return;
+      }
+      // Intercept "Add Endpoint..." action
+      if (v.value === ADD_ENDPOINT_VALUE) {
+        openAddEndpoint();
         return;
       }
       dispatch(externalApiModelChanged(v.value));
@@ -203,32 +322,7 @@ export const ExternalApiSettings = memo(() => {
         dispatch(externalApiProviderChanged(modelEntry.provider_id));
       }
     },
-    [dispatch, modelsData, providerId]
-  );
-
-  const onProviderChange = useCallback<ComboboxOnChange>(
-    (v) => {
-      if (!v) {
-        return;
-      }
-      dispatch(externalApiProviderChanged(v.value));
-
-      // Update model ID to the provider-specific one if needed
-      if (!modelsData?.models.length) {
-        return;
-      }
-      const currentModel = modelsData.models.find((m) => m.id === modelId);
-      if (currentModel) {
-        // Find the same model name on the new provider
-        const newProviderModel = modelsData.models.find(
-          (m) => m.provider_id === v.value && m.name === currentModel.name
-        );
-        if (newProviderModel && newProviderModel.id !== modelId) {
-          dispatch(externalApiModelChanged(newProviderModel.id));
-        }
-      }
-    },
-    [dispatch, modelsData, modelId]
+    [dispatch, modelsData, providerId, openAddEndpoint]
   );
 
   const onModeChange = useCallback<ComboboxOnChange>(
@@ -275,79 +369,233 @@ export const ExternalApiSettings = memo(() => {
     },
     [dispatch]
   );
+
+  const onSortChange = useCallback<ComboboxOnChange>(
+    (v) => {
+      if (v) {
+        dispatch(externalApiSortByChanged(v.value as ExternalApiSortBy));
+      }
+    },
+    [dispatch]
+  );
+
+  // --- Dynamic endpoint management callbacks ---
+  const startRename = useCallback(() => {
+    if (selectedEndpoint) {
+      setRenamingId(selectedEndpoint.id);
+      setRenameValue(selectedEndpoint.display_name);
+    }
+  }, [selectedEndpoint]);
+
+  const cancelRename = useCallback(() => {
+    setRenamingId(null);
+    setRenameValue('');
+  }, []);
+
+  const submitRename = useCallback(async () => {
+    if (renamingId && renameValue.trim()) {
+      await renameEndpoint({ id: renamingId, display_name: renameValue.trim() });
+      setRenamingId(null);
+      setRenameValue('');
+    }
+  }, [renamingId, renameValue, renameEndpoint]);
+
+  const onRenameKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        submitRename();
+      } else if (e.key === 'Escape') {
+        cancelRename();
+      }
+    },
+    [submitRename, cancelRename]
+  );
+
+  const onRenameChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    setRenameValue(e.target.value);
+  }, []);
+
+  const doRefresh = useCallback(async () => {
+    if (selectedEndpoint) {
+      await refreshEndpoint({ id: selectedEndpoint.id });
+    }
+  }, [selectedEndpoint, refreshEndpoint]);
+
+  const doDelete = useCallback(async () => {
+    if (selectedEndpoint) {
+      await deleteEndpoint({ id: selectedEndpoint.id });
+    }
+  }, [selectedEndpoint, deleteEndpoint]);
+
   return (
     <Flex flexDir="column" gap={3}>
-      {/* Model-first picker */}
+      {/* Sort toggle */}
+      <Flex alignItems="center" gap={2}>
+        <Text fontSize="xs" color="base.500" flexShrink={0}>
+          {t('externalApi.sortBy')}:
+        </Text>
+        <Combobox value={sortValue} options={SORT_OPTIONS} onChange={onSortChange} />
+      </Flex>
+
+      {/* Model picker with grouped options */}
       <FormControl>
-        <FormLabel>Model</FormLabel>
+        <Flex alignItems="center" justifyContent="space-between">
+          <FormLabel mb={0}>{t('externalApi.model')}</FormLabel>
+          <Tooltip label={t('externalApi.addEndpoint')}>
+            <IconButton
+              aria-label={t('externalApi.addEndpoint')}
+              icon={<PiPlusBold />}
+              size="xs"
+              variant="ghost"
+              onClick={openAddEndpoint}
+            />
+          </Tooltip>
+        </Flex>
         <Combobox value={modelValue} options={modelOptions} onChange={onModelChange} />
       </FormControl>
 
-      {/* Provider selection (second level) */}
-      <FormControl>
-        <Flex alignItems="center" gap={2}>
-          <FormLabel mb={0}>Provider</FormLabel>
-          {capabilities && (
-            <Badge variant="subtle" fontSize="2xs">
-              {capabilities.capability_type === 'image_text'
-                ? 'Image + Text'
-                : capabilities.capability_type === 'text'
-                  ? 'Text'
-                  : 'Image'}
-            </Badge>
+      {/* Dynamic endpoint management bar — shows when a dynamic model is selected */}
+      {isDynamic && selectedEndpoint && (
+        <Flex alignItems="center" gap={1}>
+          <Badge variant="subtle" colorScheme={selectedEndpoint.provider === 'fal' ? 'purple' : 'teal'} fontSize="2xs">
+            {selectedEndpoint.provider === 'fal' ? 'FAL.ai' : 'Replicate'}
+          </Badge>
+          {selectedEndpoint.api_category && (
+            <Text fontSize="2xs" color="base.500">
+              {selectedEndpoint.api_category}
+            </Text>
           )}
+          <Flex ml="auto" gap={0}>
+            {renamingId === selectedEndpoint.id ? (
+              <Flex gap={1} alignItems="center">
+                <Input
+                  value={renameValue}
+                  onChange={onRenameChange}
+                  onKeyDown={onRenameKeyDown}
+                  size="xs"
+                  w="140px"
+                  autoFocus
+                />
+                <IconButton
+                  aria-label={t('common.save')}
+                  icon={<PiFloppyDiskBold />}
+                  size="xs"
+                  variant="ghost"
+                  onClick={submitRename}
+                />
+                <IconButton
+                  aria-label={t('common.cancel')}
+                  icon={<PiXBold />}
+                  size="xs"
+                  variant="ghost"
+                  onClick={cancelRename}
+                />
+              </Flex>
+            ) : (
+              <>
+                <Tooltip label={t('externalApi.rename')}>
+                  <Button size="xs" variant="link" onClick={startRename} fontSize="2xs" color="base.500">
+                    {t('externalApi.rename')}
+                  </Button>
+                </Tooltip>
+                <Tooltip label={t('externalApi.refreshSchema')}>
+                  <IconButton
+                    aria-label={t('externalApi.refreshSchema')}
+                    icon={<PiArrowsClockwiseBold />}
+                    size="xs"
+                    variant="ghost"
+                    onClick={doRefresh}
+                    isLoading={isRefreshing}
+                  />
+                </Tooltip>
+                <Tooltip label={t('externalApi.deleteEndpoint')}>
+                  <IconButton
+                    aria-label={t('externalApi.deleteEndpoint')}
+                    icon={<PiTrashSimpleBold />}
+                    size="xs"
+                    variant="ghost"
+                    colorScheme="error"
+                    onClick={doDelete}
+                  />
+                </Tooltip>
+              </>
+            )}
+          </Flex>
         </Flex>
-        <Combobox value={providerValue} options={providerOptions} onChange={onProviderChange} />
-      </FormControl>
+      )}
+
+      {/* Capability badge for non-dynamic models */}
+      {!isDynamic && capabilities && (
+        <Flex alignItems="center" gap={2}>
+          <Badge variant="subtle" fontSize="2xs">
+            {capabilities.capability_type === 'image_text'
+              ? 'Image + Text'
+              : capabilities.capability_type === 'text'
+                ? 'Text'
+                : 'Image'}
+          </Badge>
+        </Flex>
+      )}
 
       {/* Capability note for provider limitations */}
       {capabilities && !capabilities.supports_refs_in_generate && generationMode === 'generate' && (
         <Text fontSize="xs" color="warning.400">
-          Reference images only available in Edit mode on this provider.
+          {t('externalApi.refsEditOnly')}
         </Text>
       )}
 
-      <FormControl>
-        <FormLabel>Mode</FormLabel>
-        <Combobox value={modeValue} options={modeOptions} onChange={onModeChange} />
-      </FormControl>
+      {/* --- Hardcoded settings (non-dynamic models) --- */}
+      {!isDynamic && (
+        <>
+          <FormControl>
+            <FormLabel>{t('externalApi.mode')}</FormLabel>
+            <Combobox value={modeValue} options={modeOptions} onChange={onModeChange} />
+          </FormControl>
 
-      <ExternalApiReferenceImages />
+          <ExternalApiReferenceImages />
 
-      <FormControl>
-        <FormLabel>Aspect Ratio</FormLabel>
-        <Combobox value={aspectRatioValue} options={ASPECT_RATIO_OPTIONS} onChange={onAspectRatioChange} />
-      </FormControl>
+          <FormControl>
+            <FormLabel>{t('externalApi.aspectRatio')}</FormLabel>
+            <Combobox value={aspectRatioValue} options={ASPECT_RATIO_OPTIONS} onChange={onAspectRatioChange} />
+          </FormControl>
 
-      <FormControl>
-        <FormLabel>Resolution</FormLabel>
-        <Combobox value={resolutionValue} options={resolutionOptions} onChange={onResolutionChange} />
-      </FormControl>
+          <FormControl>
+            <FormLabel>{t('externalApi.resolution')}</FormLabel>
+            <Combobox value={resolutionValue} options={resolutionOptions} onChange={onResolutionChange} />
+          </FormControl>
 
-      {/* Output format: show based on capabilities */}
-      {(!capabilities || capabilities.output_formats.length > 1) && (
-        <FormControl>
-          <FormLabel>Output Format</FormLabel>
-          <Combobox value={outputFormatValue} options={OUTPUT_FORMAT_OPTIONS} onChange={onOutputFormatChange} />
-        </FormControl>
+          {(!capabilities || capabilities.output_formats.length > 1) && (
+            <FormControl>
+              <FormLabel>{t('externalApi.outputFormat')}</FormLabel>
+              <Combobox value={outputFormatValue} options={OUTPUT_FORMAT_OPTIONS} onChange={onOutputFormatChange} />
+            </FormControl>
+          )}
+
+          <FormControl>
+            <FormLabel>{t('externalApi.safetyTolerance')}</FormLabel>
+            <CompositeNumberInput
+              value={safetyTolerance}
+              min={1}
+              max={6}
+              step={1}
+              onChange={onSafetyToleranceChange}
+              defaultValue={6}
+            />
+          </FormControl>
+
+          <FormControl>
+            <FormLabel>{t('externalApi.webSearch')}</FormLabel>
+            <Switch isChecked={enableWebSearch} onChange={onWebSearchToggle} />
+          </FormControl>
+        </>
       )}
 
-      <FormControl>
-        <FormLabel>Safety Tolerance</FormLabel>
-        <CompositeNumberInput
-          value={safetyTolerance}
-          min={1}
-          max={6}
-          step={1}
-          onChange={onSafetyToleranceChange}
-          defaultValue={6}
-        />
-      </FormControl>
+      {/* --- Dynamic settings from cached schema --- */}
+      {isDynamic && selectedModelEntry?.cached_schema && (
+        <DynamicSchemaSettings schema={selectedModelEntry.cached_schema} />
+      )}
 
-      <FormControl>
-        <FormLabel>Web Search</FormLabel>
-        <Switch isChecked={enableWebSearch} onChange={onWebSearchToggle} />
-      </FormControl>
+      <AddEndpointModal isOpen={isAddEndpointOpen} onClose={closeAddEndpoint} />
     </Flex>
   );
 });

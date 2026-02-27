@@ -29,6 +29,7 @@ class AnthropicProvider(BaseProvider):
         ref_images: list[Image.Image],
         api_key: str,
         progress_cb: Optional[ProgressCallback] = None,
+        dynamic_images: Optional[dict[str, list[Image.Image]]] = None,
     ) -> list[ImageResult]:
         raise NotImplementedError("Anthropic provider is text-only. Image generation is not supported.")
 
@@ -40,6 +41,7 @@ class AnthropicProvider(BaseProvider):
         params: GenerateParams,
         api_key: str,
         progress_cb: Optional[ProgressCallback] = None,
+        dynamic_images: Optional[dict[str, list[Image.Image]]] = None,
     ) -> list[ImageResult]:
         raise NotImplementedError("Anthropic provider is text-only. Image editing is not supported.")
 

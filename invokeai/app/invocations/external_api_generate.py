@@ -102,6 +102,17 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
         description="Inpaint mask image (grayscale). When provided and provider lacks native mask support, "
         "rendered as a semi-transparent red overlay on the first reference image with annotation text prepended to prompt.",
     )
+    dynamic_params: dict = InputField(
+        default_factory=dict,
+        description="Schema-driven dynamic parameters for FAL/Replicate endpoints. "
+        "Passed through to the provider's API call.",
+    )
+    dynamic_image_params: Optional[dict[str, list[ImageField]]] = InputField(
+        default=None,
+        description="Schema-driven image parameters keyed by field name. "
+        "Each value is a list of ImageField references that will be resolved "
+        "to PIL images and uploaded to the provider.",
+    )
 
     def _get_api_key(self) -> str:
         """Resolve the API key for the selected provider."""
@@ -130,6 +141,19 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
             pil_images.append(pil_image)
         return pil_images
 
+    def _load_dynamic_images(self, context: InvocationContext) -> dict[str, list[Image.Image]]:
+        """Load dynamic image params as PIL Image objects, keyed by field name."""
+        result: dict[str, list[Image.Image]] = {}
+        if not self.dynamic_image_params:
+            return result
+        for field_name, image_fields in self.dynamic_image_params.items():
+            pil_images: list[Image.Image] = []
+            for img_field in image_fields:
+                pil_images.append(context.images.get_pil(img_field.image_name))
+            if pil_images:
+                result[field_name] = pil_images
+        return result
+
     def _apply_mask_annotation(self, base: Image.Image, mask: Image.Image) -> Image.Image:
         """Replace the masked area with solid red so the model can clearly see what to edit.
 
@@ -148,7 +172,7 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
 
     def _build_params(self) -> GenerateParams:
         """Build the common generation parameters."""
-        return GenerateParams(
+        params = GenerateParams(
             aspect_ratio=self.aspect_ratio,
             resolution=self.resolution,
             seed=self.seed,
@@ -158,6 +182,11 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
             guidance_scale=self.guidance_scale,
             enable_web_search=self.enable_web_search,
         )
+        # Attach dynamic params for FAL/Replicate providers to read
+        # GenerateParams has extra="allow" so this is safe
+        if self.dynamic_params:
+            params.dynamic_params = self.dynamic_params  # type: ignore[attr-defined]
+        return params
 
     def invoke(self, context: InvocationContext) -> ImageOutput:
         registry = get_provider_registry()
@@ -169,6 +198,12 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
         if self.reference_images:
             context.util.signal_progress("Loading reference images...", percentage=0.05)
             ref_images = self._load_reference_images(context)
+
+        # Load dynamic image params (schema-driven image fields)
+        dynamic_images: dict[str, list[Image.Image]] = {}
+        if self.dynamic_image_params:
+            context.util.signal_progress("Loading dynamic image inputs...", percentage=0.06)
+            dynamic_images = self._load_dynamic_images(context)
 
         params = self._build_params()
         prompt = self.prompt
@@ -215,6 +250,7 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
             self._dispatch(
                 provider, is_edit, prompt, self.model_id, ref_images, params,
                 api_key, progress_cb, params.num_images, capabilities.max_images_per_call,
+                dynamic_images,
             )
         )
 
@@ -245,14 +281,16 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
         progress_cb,
         total_images: int,
         max_per_call: int,
+        dynamic_images: dict[str, list[Image.Image]] | None = None,
     ) -> list[ImageResult]:
         """Dispatch to the provider, using a mini-queue for multi-image when needed."""
+        dyn_imgs = dynamic_images or {}
 
         async def _call_provider(p: GenerateParams, pcb) -> list[ImageResult]:
             if is_edit:
-                return await provider.edit(prompt, model_id, images, p, api_key, pcb)
+                return await provider.edit(prompt, model_id, images, p, api_key, pcb, dynamic_images=dyn_imgs)
             else:
-                return await provider.generate(prompt, model_id, p, images, api_key, pcb)
+                return await provider.generate(prompt, model_id, p, images, api_key, pcb, dynamic_images=dyn_imgs)
 
         # Single call is enough
         if total_images <= max_per_call:

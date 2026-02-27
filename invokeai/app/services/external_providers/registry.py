@@ -102,5 +102,20 @@ def _register_builtin_providers() -> None:
     except ImportError:
         log.debug("Failed to load OpenRouter provider")
 
-    # FAL.ai provider will be registered here after dynamic API UI implementation
-    # Replicate provider will be registered here after dynamic API UI implementation
+    # FAL.ai dynamic provider (reads models from dynamic_endpoints.json)
+    try:
+        from invokeai.app.services.external_providers.fal_dynamic_provider import FalDynamicProvider
+
+        _registry.register(FalDynamicProvider())
+        log.debug("Registered FAL.ai dynamic provider")
+    except ImportError:
+        log.debug("Failed to load FAL.ai dynamic provider")
+
+    # Replicate dynamic provider (reads models from dynamic_endpoints.json)
+    try:
+        from invokeai.app.services.external_providers.replicate_provider import ReplicateDynamicProvider
+
+        _registry.register(ReplicateDynamicProvider())
+        log.debug("Registered Replicate dynamic provider")
+    except ImportError:
+        log.debug("Failed to load Replicate dynamic provider")

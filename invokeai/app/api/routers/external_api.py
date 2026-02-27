@@ -55,6 +55,8 @@ class ModelWithCapabilities(BaseModel):
     provider_id: str = Field(description="Provider serving this model")
     description: str = Field(default="", description="Model description")
     capabilities: Optional[ProviderCapabilities] = Field(default=None, description="Provider capabilities for this model")
+    is_dynamic: bool = Field(default=False, description="Whether this is a dynamic endpoint with cached schema")
+    cached_schema: Optional[dict] = Field(default=None, description="JSON Schema for dynamic settings UI (only for dynamic endpoints)")
 
 
 class ModelListResponse(BaseModel):
@@ -179,9 +181,15 @@ async def get_models() -> ModelListResponse:
     registry = get_provider_registry()
     models: list[ModelWithCapabilities] = []
 
+    # Load dynamic endpoints for schema lookup
+    from invokeai.app.api.routers.dynamic_endpoints import _load_endpoints
+
+    dynamic_eps = {ep["endpoint_id"]: ep for ep in _load_endpoints()}
+
     for provider in registry.get_all_providers():
         for model_info in provider.get_supported_models():
             caps = provider.get_capabilities(model_info.id)
+            ep_data = dynamic_eps.get(model_info.id)
             models.append(
                 ModelWithCapabilities(
                     id=model_info.id,
@@ -189,6 +197,8 @@ async def get_models() -> ModelListResponse:
                     provider_id=model_info.provider_id,
                     description=model_info.description,
                     capabilities=caps,
+                    is_dynamic=ep_data is not None,
+                    cached_schema=ep_data.get("cached_schema") if ep_data else None,
                 )
             )
 

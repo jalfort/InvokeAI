@@ -2,6 +2,7 @@ import { api, buildV1Url } from '..';
 
 const buildExternalApiUrl = (path: string = '') => buildV1Url(`external_api/${path}`);
 const buildPromptLibraryUrl = (path: string = '') => buildV1Url(`prompt_library/${path}`);
+const buildDynamicEndpointsUrl = (path: string = '') => buildV1Url(`dynamic_endpoints/${path}`);
 
 type ProviderStatus = {
   provider: string;
@@ -33,6 +34,8 @@ type ModelWithCapabilities = {
   provider_id: string;
   description: string;
   capabilities: ProviderCapabilities | null;
+  is_dynamic: boolean;
+  cached_schema: Record<string, unknown> | null;
 };
 
 type ModelListResponse = {
@@ -130,6 +133,46 @@ type RefineSystemPromptResponse = {
   model: string;
 };
 
+// --- Dynamic Endpoint Types ---
+
+export type DynamicEndpoint = {
+  id: string;
+  provider: 'fal' | 'replicate';
+  endpoint_id: string;
+  display_name: string;
+  api_category: string;
+  user_category: string;
+  cached_schema: Record<string, unknown>;
+  cached_at: string;
+  model_version: string;
+};
+
+type DynamicEndpointListResponse = {
+  endpoints: DynamicEndpoint[];
+};
+
+type AddEndpointRequest = {
+  endpoint_input: string;
+};
+
+type RenameEndpointRequest = {
+  id: string;
+  display_name: string;
+};
+
+type SetCategoryRequest = {
+  id: string;
+  user_category: string;
+};
+
+type RefreshEndpointRequest = {
+  id: string;
+};
+
+type DeleteEndpointRequest = {
+  id: string;
+};
+
 export const externalApiEndpoints = api.injectEndpoints({
   endpoints: (build) => ({
     getExternalApiProviders: build.query<ProviderListResponse, void>({
@@ -223,6 +266,54 @@ export const externalApiEndpoints = api.injectEndpoints({
         body,
       }),
     }),
+    // --- Dynamic Endpoints ---
+    getDynamicEndpoints: build.query<DynamicEndpointListResponse, void>({
+      query: () => ({
+        url: buildDynamicEndpointsUrl('list'),
+        method: 'GET',
+      }),
+      providesTags: ['DynamicEndpoints', 'FetchOnReconnect'],
+    }),
+    addDynamicEndpoint: build.mutation<DynamicEndpoint, AddEndpointRequest>({
+      query: (body) => ({
+        url: buildDynamicEndpointsUrl('add'),
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DynamicEndpoints', 'ExternalApiProviders'],
+    }),
+    renameDynamicEndpoint: build.mutation<DynamicEndpoint, RenameEndpointRequest>({
+      query: (body) => ({
+        url: buildDynamicEndpointsUrl('rename'),
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DynamicEndpoints', 'ExternalApiProviders'],
+    }),
+    setDynamicEndpointCategory: build.mutation<DynamicEndpoint, SetCategoryRequest>({
+      query: (body) => ({
+        url: buildDynamicEndpointsUrl('set_category'),
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DynamicEndpoints'],
+    }),
+    refreshDynamicEndpoint: build.mutation<DynamicEndpoint, RefreshEndpointRequest>({
+      query: (body) => ({
+        url: buildDynamicEndpointsUrl('refresh'),
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DynamicEndpoints', 'ExternalApiProviders'],
+    }),
+    deleteDynamicEndpoint: build.mutation<{ deleted: boolean }, DeleteEndpointRequest>({
+      query: (body) => ({
+        url: buildDynamicEndpointsUrl('delete'),
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DynamicEndpoints', 'ExternalApiProviders'],
+    }),
   }),
 });
 
@@ -239,4 +330,10 @@ export const {
   useUpdateSystemPromptMutation,
   useDeleteSystemPromptMutation,
   useRefineSystemPromptMutation,
+  useGetDynamicEndpointsQuery,
+  useAddDynamicEndpointMutation,
+  useRenameDynamicEndpointMutation,
+  useSetDynamicEndpointCategoryMutation,
+  useRefreshDynamicEndpointMutation,
+  useDeleteDynamicEndpointMutation,
 } = externalApiEndpoints;

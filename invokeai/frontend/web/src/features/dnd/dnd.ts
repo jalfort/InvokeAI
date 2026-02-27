@@ -5,7 +5,10 @@ import { getPrefixedId } from 'features/controlLayers/konva/util';
 import { refImageAdded } from 'features/controlLayers/store/refImagesSlice';
 import type { CanvasEntityIdentifier, CanvasEntityType } from 'features/controlLayers/store/types';
 import { imageDTOToCroppableImage } from 'features/controlLayers/store/util';
-import { externalApiReferenceImageAdded } from 'features/externalApi/store/externalApiSlice';
+import {
+  externalApiDynamicImageAdded,
+  externalApiReferenceImageAdded,
+} from 'features/externalApi/store/externalApiSlice';
 import { selectComparisonImages } from 'features/gallery/components/ImageViewer/common';
 import type { BoardId } from 'features/gallery/store/types';
 import {
@@ -499,6 +502,29 @@ export const addExternalApiReferenceImageDndTarget: DndTarget<
 };
 //#endregion
 
+//#region Add Dynamic Schema Image
+const _addDynamicSchemaImage = buildTypeAndKey('add-dynamic-schema-image');
+export type AddDynamicSchemaImageDndTargetData = DndData<
+  typeof _addDynamicSchemaImage.type,
+  typeof _addDynamicSchemaImage.key,
+  { fieldKey: string }
+>;
+export const addDynamicSchemaImageDndTarget: DndTarget<
+  AddDynamicSchemaImageDndTargetData,
+  SingleImageDndSourceData
+> = {
+  ..._addDynamicSchemaImage,
+  typeGuard: buildTypeGuard(_addDynamicSchemaImage.key),
+  getData: buildGetData(_addDynamicSchemaImage.key, _addDynamicSchemaImage.type),
+  isValid: ({ sourceData }) => singleImageDndSource.typeGuard(sourceData),
+  handler: ({ sourceData, targetData, dispatch }) => {
+    const { imageDTO } = sourceData.payload;
+    const { fieldKey } = targetData.payload;
+    dispatch(externalApiDynamicImageAdded({ fieldKey, imageName: imageDTO.image_name }));
+  },
+};
+//#endregion
+
 //#region Remove From Board
 const _removeFromBoard = buildTypeAndKey('remove-from-board');
 export type RemoveImageFromBoardDndTargetData = DndData<
@@ -553,6 +579,7 @@ export const dndTargets = [
   newCanvasFromImageDndTarget,
   replaceCanvasEntityObjectsWithImageDndTarget,
   addExternalApiReferenceImageDndTarget,
+  addDynamicSchemaImageDndTarget,
   addImageToBoardDndTarget,
   removeImageFromBoardDndTarget,
 ] as const;

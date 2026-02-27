@@ -41,6 +41,7 @@ class GeminiProvider(BaseProvider):
         ref_images: list[Image.Image],
         api_key: str,
         progress_cb: Optional[ProgressCallback] = None,
+        dynamic_images: Optional[dict[str, list[Image.Image]]] = None,
     ) -> list[ImageResult]:
         """Generate an image from text with optional reference images."""
         return await self._call_gemini(prompt, model_id, params, ref_images, api_key, progress_cb)
@@ -53,6 +54,7 @@ class GeminiProvider(BaseProvider):
         params: GenerateParams,
         api_key: str,
         progress_cb: Optional[ProgressCallback] = None,
+        dynamic_images: Optional[dict[str, list[Image.Image]]] = None,
     ) -> list[ImageResult]:
         """Edit images based on a prompt. Source images are passed as multimodal context."""
         return await self._call_gemini(prompt, model_id, params, source_images, api_key, progress_cb)

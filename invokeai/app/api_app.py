@@ -22,6 +22,7 @@ from invokeai.app.api.routers import (
     boards,
     client_state,
     download_queue,
+    dynamic_endpoints,
     external_api,
     images,
     model_manager,
@@ -142,6 +143,7 @@ app.include_router(client_state.client_state_router, prefix="/api")
 app.include_router(recall_parameters.recall_parameters_router, prefix="/api")
 app.include_router(external_api.external_api_router, prefix="/api")
 app.include_router(prompt_library.prompt_library_router, prefix="/api")
+app.include_router(dynamic_endpoints.dynamic_endpoints_router, prefix="/api")
 
 app.openapi = get_openapi_func(app)
 

@@ -33,8 +33,11 @@ export type ExternalApiGenerationMode = z.infer<typeof zExternalApiGenerationMod
 const zExternalApiModeSource = z.enum(['user', 'auto']);
 export type ExternalApiModeSource = z.infer<typeof zExternalApiModeSource>;
 
+const zExternalApiSortBy = z.enum(['provider', 'api_category', 'user_category']);
+export type ExternalApiSortBy = z.infer<typeof zExternalApiSortBy>;
+
 const zExternalApiState = z.object({
-  _version: z.literal(4),
+  _version: z.literal(6),
   isEnabled: z.boolean(),
   providerId: z.string(),
   modelId: z.string(),
@@ -47,11 +50,14 @@ const zExternalApiState = z.object({
   numImages: z.number().int().min(1).max(4),
   outputFormat: zExternalApiOutputFormat,
   referenceImageNames: z.array(z.string()),
+  dynamicParams: z.record(z.string(), z.unknown()),
+  dynamicImageParams: z.record(z.string(), z.array(z.string())),
+  sortEndpointsBy: zExternalApiSortBy,
 });
 export type ExternalApiState = z.infer<typeof zExternalApiState>;
 
 const getInitialState = (): ExternalApiState => ({
-  _version: 4,
+  _version: 6,
   isEnabled: false,
   providerId: 'fal',
   modelId: 'fal-ai/nano-banana-pro',
@@ -64,6 +70,9 @@ const getInitialState = (): ExternalApiState => ({
   numImages: 1,
   outputFormat: 'png',
   referenceImageNames: [],
+  dynamicParams: {},
+  dynamicImageParams: {},
+  sortEndpointsBy: 'provider',
 });
 
 const slice = createSlice({
@@ -78,6 +87,9 @@ const slice = createSlice({
     },
     externalApiModelChanged: (state, action: PayloadAction<string>) => {
       state.modelId = action.payload;
+      // Reset dynamic params when switching models — each model has its own schema
+      state.dynamicParams = {};
+      state.dynamicImageParams = {};
     },
     externalApiGenerationModeChanged: (state, action: PayloadAction<ExternalApiGenerationMode>) => {
       state.generationMode = action.payload;
@@ -116,6 +128,37 @@ const slice = createSlice({
     externalApiReferenceImagesCleared: (state) => {
       state.referenceImageNames = [];
     },
+    externalApiDynamicParamChanged: (state, action: PayloadAction<{ key: string; value: unknown }>) => {
+      state.dynamicParams[action.payload.key] = action.payload.value;
+    },
+    externalApiDynamicParamsReset: (state) => {
+      state.dynamicParams = {};
+    },
+    externalApiDynamicImageAdded: (state, action: PayloadAction<{ fieldKey: string; imageName: string }>) => {
+      const { fieldKey, imageName } = action.payload;
+      if (!state.dynamicImageParams[fieldKey]) {
+        state.dynamicImageParams[fieldKey] = [];
+      }
+      if (!state.dynamicImageParams[fieldKey]!.includes(imageName)) {
+        state.dynamicImageParams[fieldKey]!.push(imageName);
+      }
+    },
+    externalApiDynamicImageRemoved: (state, action: PayloadAction<{ fieldKey: string; imageName: string }>) => {
+      const { fieldKey, imageName } = action.payload;
+      const arr = state.dynamicImageParams[fieldKey];
+      if (arr) {
+        state.dynamicImageParams[fieldKey] = arr.filter((n) => n !== imageName);
+      }
+    },
+    externalApiDynamicImageFieldCleared: (state, action: PayloadAction<string>) => {
+      delete state.dynamicImageParams[action.payload];
+    },
+    externalApiDynamicImageParamsReset: (state) => {
+      state.dynamicImageParams = {};
+    },
+    externalApiSortByChanged: (state, action: PayloadAction<ExternalApiSortBy>) => {
+      state.sortEndpointsBy = action.payload;
+    },
   },
 });
 
@@ -134,6 +177,13 @@ export const {
   externalApiReferenceImageAdded,
   externalApiReferenceImageRemoved,
   externalApiReferenceImagesCleared,
+  externalApiDynamicParamChanged,
+  externalApiDynamicParamsReset,
+  externalApiDynamicImageAdded,
+  externalApiDynamicImageRemoved,
+  externalApiDynamicImageFieldCleared,
+  externalApiDynamicImageParamsReset,
+  externalApiSortByChanged,
 } = slice.actions;
 
 export const externalApiSliceConfig: SliceConfig<typeof slice> = {
@@ -172,6 +222,25 @@ export const externalApiSliceConfig: SliceConfig<typeof slice> = {
         }
       }
 
+      // Migrate v4 -> v5: add dynamicParams, sortEndpointsBy
+      if (state._version === 4) {
+        state._version = 5;
+        if (!('dynamicParams' in state)) {
+          state.dynamicParams = {};
+        }
+        if (!('sortEndpointsBy' in state)) {
+          state.sortEndpointsBy = 'provider';
+        }
+      }
+
+      // Migrate v5 -> v6: add dynamicImageParams
+      if (state._version === 5) {
+        state._version = 6;
+        if (!('dynamicImageParams' in state)) {
+          state.dynamicImageParams = {};
+        }
+      }
+
       return zExternalApiState.parse(state);
     },
   },
@@ -193,3 +262,6 @@ export const selectExternalApiNumImages = createExternalApiSelector((s) => s.num
 export const selectExternalApiOutputFormat = createExternalApiSelector((s) => s.outputFormat);
 export const selectExternalApiModeSource = createExternalApiSelector((s) => s.modeSource);
 export const selectExternalApiReferenceImageNames = createExternalApiSelector((s) => s.referenceImageNames);
+export const selectExternalApiDynamicParams = createExternalApiSelector((s) => s.dynamicParams);
+export const selectExternalApiDynamicImageParams = createExternalApiSelector((s) => s.dynamicImageParams);
+export const selectExternalApiSortBy = createExternalApiSelector((s) => s.sortEndpointsBy);
