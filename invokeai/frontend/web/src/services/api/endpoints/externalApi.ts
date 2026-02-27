@@ -153,6 +153,7 @@ type DynamicEndpointListResponse = {
 
 type AddEndpointRequest = {
   endpoint_input: string;
+  provider_hint?: 'fal' | 'replicate' | null;
 };
 
 type RenameEndpointRequest = {

@@ -6,6 +6,7 @@ ProviderRegistry.
 """
 
 import asyncio
+import logging
 import os
 from typing import Literal, Optional
 
@@ -27,7 +28,11 @@ from invokeai.app.invocations.primitives import ImageOutput
 from invokeai.app.services.config.config_default import get_config
 from invokeai.app.services.external_providers.base import GenerateParams, ImageResult
 from invokeai.app.services.external_providers.registry import get_provider_registry
+from invokeai.app.services.image_files.image_files_common import ImageFileNotFoundException
+from invokeai.app.services.image_records.image_records_common import ImageRecordNotFoundException
 from invokeai.app.services.shared.invocation_context import InvocationContext
+
+logger = logging.getLogger(__name__)
 
 
 @invocation(
@@ -134,22 +139,39 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
         return api_key
 
     def _load_reference_images(self, context: InvocationContext) -> list[Image.Image]:
-        """Load reference images as PIL Image objects."""
+        """Load reference images as PIL Image objects, skipping any that are missing."""
         pil_images: list[Image.Image] = []
         for img_field in self.reference_images:
-            pil_image = context.images.get_pil(img_field.image_name)
-            pil_images.append(pil_image)
+            try:
+                pil_image = context.images.get_pil(img_field.image_name)
+                pil_images.append(pil_image)
+            except (ImageFileNotFoundException, ImageRecordNotFoundException, FileNotFoundError):
+                logger.warning(f"Reference image '{img_field.image_name}' not found, skipping.")
         return pil_images
 
     def _load_dynamic_images(self, context: InvocationContext) -> dict[str, list[Image.Image]]:
-        """Load dynamic image params as PIL Image objects, keyed by field name."""
+        """Load dynamic image params as PIL Image objects, keyed by field name.
+
+        Skips individual missing images but raises if ALL images for a field are missing,
+        since dynamic image fields are typically required inputs (e.g. upscaler source).
+        """
         result: dict[str, list[Image.Image]] = {}
         if not self.dynamic_image_params:
             return result
         for field_name, image_fields in self.dynamic_image_params.items():
             pil_images: list[Image.Image] = []
+            missing_names: list[str] = []
             for img_field in image_fields:
-                pil_images.append(context.images.get_pil(img_field.image_name))
+                try:
+                    pil_images.append(context.images.get_pil(img_field.image_name))
+                except (ImageFileNotFoundException, ImageRecordNotFoundException, FileNotFoundError):
+                    missing_names.append(img_field.image_name)
+                    logger.warning(f"Dynamic image '{img_field.image_name}' for field '{field_name}' not found, skipping.")
+            if not pil_images and missing_names:
+                raise RuntimeError(
+                    f"All images for required field '{field_name}' are missing from disk. "
+                    f"Try re-adding the image(s) from the gallery."
+                )
             if pil_images:
                 result[field_name] = pil_images
         return result
@@ -213,14 +235,17 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
         capabilities = provider.get_capabilities(self.model_id)
         if self.mask_image and not capabilities.supports_masks and ref_images:
             context.util.signal_progress("Applying mask annotation...", percentage=0.08)
-            mask_pil = context.images.get_pil(self.mask_image.image_name)
-            ref_images[0] = self._apply_mask_annotation(ref_images[0], mask_pil)
-            prompt = (
-                "IMPORTANT: The image contains an area painted in solid red. "
-                "ONLY modify the content inside the red area. "
-                "Keep everything outside the red area exactly the same. "
-                f"{prompt}"
-            )
+            try:
+                mask_pil = context.images.get_pil(self.mask_image.image_name)
+                ref_images[0] = self._apply_mask_annotation(ref_images[0], mask_pil)
+                prompt = (
+                    "IMPORTANT: The image contains an area painted in solid red. "
+                    "ONLY modify the content inside the red area. "
+                    "Keep everything outside the red area exactly the same. "
+                    f"{prompt}"
+                )
+            except (ImageFileNotFoundException, ImageRecordNotFoundException, FileNotFoundError):
+                logger.warning(f"Mask image '{self.mask_image.image_name}' not found, skipping mask annotation.")
 
         # Reference-aware prompt prefix: help model distinguish canvas from reference images
         # Only when editing with canvas content (first image) + additional user references

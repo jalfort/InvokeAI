@@ -23,24 +23,52 @@ type Props = {
   onClose: () => void;
 };
 
+type DetectionResult = {
+  provider: 'fal' | 'replicate' | null;
+  /** True when the provider was inferred heuristically and the user may want to override. */
+  ambiguous: boolean;
+};
+
 /**
  * Detect provider from the slug/URL input.
- * - `fal-ai/` prefix or fal.ai URL → FAL.ai
- * - Everything else → Replicate
+ * Mirrors the backend `_parse_endpoint_input` priority order.
  */
-const detectProvider = (input: string): 'fal' | 'replicate' | null => {
-  const trimmed = input.trim();
+const detectProvider = (input: string): DetectionResult => {
+  const trimmed = input.trim().replace(/\/+$/, '');
   if (!trimmed) {
-    return null;
+    return { provider: null, ambiguous: false };
   }
-  if (trimmed.startsWith('fal-ai/') || trimmed.includes('fal.ai/')) {
-    return 'fal';
+
+  // URL-based: definitive
+  if (trimmed.includes('fal.ai/') || trimmed.includes('fal.run/')) {
+    return { provider: 'fal', ambiguous: false };
   }
-  // Replicate slugs are "owner/model" or replicate.com URLs
-  if (trimmed.includes('/') || trimmed.includes('replicate.com')) {
-    return 'replicate';
+  if (trimmed.includes('replicate.com')) {
+    return { provider: 'replicate', ambiguous: false };
   }
-  return null;
+
+  // fal-ai/ prefix: definitive FAL first-party
+  if (trimmed.startsWith('fal-ai/')) {
+    return { provider: 'fal', ambiguous: false };
+  }
+
+  // Replicate version hash: owner/model:hex64
+  if (/^[^/]+\/[^/:]+:[0-9a-f]{64}$/.test(trimmed)) {
+    return { provider: 'replicate', ambiguous: false };
+  }
+
+  // 3+ path segments → likely FAL third-party (recraft/v4/text-to-image)
+  const segments = trimmed.split('/');
+  if (segments.length >= 3) {
+    return { provider: 'fal', ambiguous: true };
+  }
+
+  // 2-segment slug → default Replicate, but ambiguous
+  if (segments.length === 2) {
+    return { provider: 'replicate', ambiguous: true };
+  }
+
+  return { provider: null, ambiguous: false };
 };
 
 export const AddEndpointModal = memo(({ isOpen, onClose }: Props) => {
@@ -50,29 +78,44 @@ export const AddEndpointModal = memo(({ isOpen, onClose }: Props) => {
 
   const [endpointInput, setEndpointInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [providerOverride, setProviderOverride] = useState<'fal' | 'replicate' | null>(null);
   const [addEndpoint, { isLoading }] = useAddDynamicEndpointMutation();
 
-  const detectedProvider = useMemo(() => detectProvider(endpointInput), [endpointInput]);
+  const detection = useMemo(() => detectProvider(endpointInput), [endpointInput]);
+  const effectiveProvider = providerOverride ?? detection.provider;
 
   const onInputChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setEndpointInput(e.target.value);
     setError(null);
+    setProviderOverride(null);
   }, []);
+
+  const toggleProvider = useCallback(() => {
+    if (!detection.ambiguous) {
+      return;
+    }
+    const current = providerOverride ?? detection.provider;
+    setProviderOverride(current === 'fal' ? 'replicate' : 'fal');
+  }, [detection, providerOverride]);
 
   const onSubmit = useCallback(async () => {
     if (!endpointInput.trim()) {
       return;
     }
     try {
-      await addEndpoint({ endpoint_input: endpointInput.trim() }).unwrap();
+      await addEndpoint({
+        endpoint_input: endpointInput.trim(),
+        provider_hint: providerOverride,
+      }).unwrap();
       setEndpointInput('');
       setError(null);
+      setProviderOverride(null);
       onClose();
     } catch (err) {
       const msg = (err as { data?: { detail?: string } })?.data?.detail ?? t('externalApi.addEndpointError');
       setError(msg);
     }
-  }, [endpointInput, addEndpoint, onClose, t]);
+  }, [endpointInput, addEndpoint, providerOverride, onClose, t]);
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -86,6 +129,7 @@ export const AddEndpointModal = memo(({ isOpen, onClose }: Props) => {
   const handleClose = useCallback(() => {
     setEndpointInput('');
     setError(null);
+    setProviderOverride(null);
     onClose();
   }, [onClose]);
 
@@ -116,18 +160,25 @@ export const AddEndpointModal = memo(({ isOpen, onClose }: Props) => {
                 />
               </FormControl>
 
-              {detectedProvider && (
+              {effectiveProvider && (
                 <Flex alignItems="center" gap={2}>
                   <Text fontSize="xs" color="base.400">
                     {t('externalApi.detectedProvider')}:
                   </Text>
                   <Badge
                     variant="subtle"
-                    colorScheme={detectedProvider === 'fal' ? 'purple' : 'teal'}
+                    colorScheme={effectiveProvider === 'fal' ? 'purple' : 'teal'}
                     fontSize="xs"
+                    cursor={detection.ambiguous ? 'pointer' : undefined}
+                    onClick={detection.ambiguous ? toggleProvider : undefined}
                   >
-                    {detectedProvider === 'fal' ? 'FAL.ai' : 'Replicate'}
+                    {effectiveProvider === 'fal' ? 'FAL.ai' : 'Replicate'}
                   </Badge>
+                  {detection.ambiguous && (
+                    <Text fontSize="xs" color="base.500">
+                      {t('externalApi.clickToSwitch')}
+                    </Text>
+                  )}
                 </Flex>
               )}
 
@@ -148,7 +199,7 @@ export const AddEndpointModal = memo(({ isOpen, onClose }: Props) => {
                 colorScheme="invokeBlue"
                 onClick={onSubmit}
                 isLoading={isLoading}
-                isDisabled={!endpointInput.trim() || !detectedProvider}
+                isDisabled={!endpointInput.trim() || !effectiveProvider}
                 size="sm"
               >
                 {t('externalApi.add')}

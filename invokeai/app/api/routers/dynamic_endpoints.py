@@ -54,6 +54,7 @@ class AddEndpointRequest(BaseModel):
     """Request to add a new dynamic endpoint."""
 
     endpoint_input: str = Field(description="Model slug or full URL, e.g. 'fal-ai/flux-2-pro' or 'https://fal.ai/models/fal-ai/flux-2-pro'")
+    provider_hint: Optional[Literal["fal", "replicate"]] = Field(default=None, description="Optional provider override for ambiguous slugs")
 
 
 class RenameEndpointRequest(BaseModel):
@@ -130,40 +131,141 @@ def _find_endpoint(entries: list[dict], endpoint_id: str) -> Optional[dict]:
     return None
 
 
+async def refresh_replicate_version(model_slug: str, api_key: str) -> str:
+    """Fetch the latest version hash for a Replicate model and update the cache.
+
+    Returns the new version hash, or empty string if the fetch fails.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                f"https://api.replicate.com/v1/models/{model_slug}",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            if resp.status_code != 200:
+                logger.warning(f"Failed to refresh Replicate version for {model_slug}: HTTP {resp.status_code}")
+                return ""
+            data = resp.json()
+            new_version = data.get("latest_version", {}).get("id", "")
+            if not new_version:
+                return ""
+
+        # Update the cached endpoint
+        entries = _load_endpoints()
+        for ep in entries:
+            if ep.get("endpoint_id") == model_slug and ep.get("provider") == "replicate":
+                ep["model_version"] = new_version
+                logger.info(f"Refreshed Replicate version for {model_slug}: {new_version[:12]}...")
+                break
+        _save_endpoints(entries)
+        return new_version
+    except Exception as e:
+        logger.warning(f"Error refreshing Replicate version for {model_slug}: {e}")
+        return ""
+
+
 # ---------------------------------------------------------------------------
 # Slug / URL parsing
 # ---------------------------------------------------------------------------
 
 
-def _parse_endpoint_input(raw_input: str) -> tuple[Literal["fal", "replicate"], str]:
+def _parse_endpoint_input(
+    raw_input: str,
+    provider_hint: Optional[Literal["fal", "replicate"]] = None,
+) -> tuple[Literal["fal", "replicate"], str]:
     """Parse a slug or URL into (provider, endpoint_id).
 
+    Detection priority:
+      1. URL domain (fal.ai / fal.run / replicate.com) — definitive
+      2. fal-ai/ prefix — definitive FAL first-party
+      3. Replicate version hash (owner/model:hex64) — definitive Replicate
+      4. User-provided provider_hint
+      5. Path depth heuristic: 3+ segments → FAL (third-party vendors)
+      6. Default: Replicate (2-segment owner/model)
+
     Examples:
-        "fal-ai/flux-2-pro"                          -> ("fal", "fal-ai/flux-2-pro")
-        "https://fal.ai/models/fal-ai/flux-2-pro"    -> ("fal", "fal-ai/flux-2-pro")
-        "bytedance/seedream-5-lite"                   -> ("replicate", "bytedance/seedream-5-lite")
-        "https://replicate.com/stability-ai/sdxl"     -> ("replicate", "stability-ai/sdxl")
+        "fal-ai/flux-2-pro"                                -> ("fal", "fal-ai/flux-2-pro")
+        "https://fal.ai/models/fal-ai/flux-2-pro"          -> ("fal", "fal-ai/flux-2-pro")
+        "https://fal.ai/models/clarityai/crystal-upscaler"  -> ("fal", "clarityai/crystal-upscaler")
+        "recraft/v4/pro/text-to-image"                      -> ("fal", "recraft/v4/pro/text-to-image")
+        "https://replicate.com/stability-ai/sdxl"           -> ("replicate", "stability-ai/sdxl")
+        "bytedance/seedream-4"                              -> ("replicate", "bytedance/seedream-4")
     """
     cleaned = raw_input.strip().rstrip("/")
 
-    # URL: fal.ai
-    if "fal.ai" in cleaned:
-        match = re.search(r"fal\.ai/models/(.+)", cleaned)
-        slug = match.group(1).rstrip("/") if match else cleaned
+    # ── Step 1: URL-based detection (definitive) ──────────────────
+
+    # FAL URLs: fal.ai/models/..., fal.run/...
+    if "fal.ai" in cleaned or "fal.run" in cleaned:
+        slug = _extract_fal_slug(cleaned)
         return ("fal", slug)
 
-    # URL: replicate.com
+    # Replicate URLs: replicate.com/..., api.replicate.com/...
     if "replicate.com" in cleaned:
-        match = re.search(r"replicate\.com/([^/]+/[^/?#]+)", cleaned)
-        slug = match.group(1) if match else cleaned
+        slug = _extract_replicate_slug(cleaned)
         return ("replicate", slug)
 
-    # Raw slug: fal-ai/ prefix → FAL
+    # ── Step 2: Definitive prefix/suffix markers ──────────────────
+
+    # fal-ai/ prefix → always FAL first-party
     if cleaned.startswith("fal-ai/"):
         return ("fal", cleaned)
 
-    # Default: treat as Replicate (owner/name pattern)
+    # Replicate version hash: owner/model:64_hex_chars
+    if re.match(r"^[^/]+/[^/:]+:[0-9a-f]{64}$", cleaned):
+        slug = cleaned.split(":")[0]
+        return ("replicate", slug)
+
+    # ── Step 3: User-provided hint ────────────────────────────────
+    if provider_hint:
+        return (provider_hint, cleaned)
+
+    # ── Step 4: Path depth heuristic ──────────────────────────────
+    # FAL third-party slugs often have 3+ segments (recraft/v4/text-to-image)
+    # Replicate slugs are always exactly 2 segments (owner/model)
+    segments = cleaned.split("/")
+    if len(segments) >= 3:
+        return ("fal", cleaned)
+
+    # ── Step 5: Ambiguous 2-segment slug → default Replicate ─────
     return ("replicate", cleaned)
+
+
+def _extract_fal_slug(url: str) -> str:
+    """Extract model slug from a FAL URL, stripping page suffixes."""
+    cleaned = url.rstrip("/")
+
+    # fal.run/slug format
+    if "fal.run/" in cleaned:
+        match = re.search(r"fal\.run/(.+)", cleaned)
+        slug = match.group(1) if match else cleaned
+    # fal.ai/models/slug format
+    elif "fal.ai/models/" in cleaned:
+        match = re.search(r"fal\.ai/models/(.+)", cleaned)
+        slug = match.group(1) if match else cleaned
+    else:
+        slug = cleaned
+
+    # Strip known URL-only suffixes that aren't part of the model slug
+    slug = re.sub(r"/(api|playground|examples)$", "", slug)
+    return slug.rstrip("/")
+
+
+def _extract_replicate_slug(url: str) -> str:
+    """Extract owner/model from a Replicate URL, stripping version paths."""
+    cleaned = url.rstrip("/")
+
+    # API URL: api.replicate.com/v1/models/owner/model
+    api_match = re.search(r"api\.replicate\.com/v1/models/([^/]+/[^/]+)", cleaned)
+    if api_match:
+        return api_match.group(1)
+
+    # Web URL: replicate.com/owner/model[/versions/...]
+    web_match = re.search(r"replicate\.com/([^/]+/[^/?#]+)", cleaned)
+    if web_match:
+        return web_match.group(1)
+
+    return cleaned
 
 
 # ---------------------------------------------------------------------------
@@ -197,8 +299,9 @@ def _resolve_refs(node: dict, definitions: dict, _seen: set[str] | None = None) 
         ref_name = ref_path.rsplit("/", 1)[-1]
         resolved = definitions.get(ref_name)
         if resolved and isinstance(resolved, dict):
-            _seen.add(ref_path)
-            return _resolve_refs(dict(resolved), definitions, _seen)
+            # Copy _seen so sibling properties can resolve the same $ref independently
+            branch_seen = _seen | {ref_path}
+            return _resolve_refs(dict(resolved), definitions, branch_seen)
         return node
 
     # $ref alongside other keys (e.g., {"$ref": "...", "default": "1:1"})
@@ -209,12 +312,12 @@ def _resolve_refs(node: dict, definitions: dict, _seen: set[str] | None = None) 
             ref_name = ref_path.rsplit("/", 1)[-1]
             resolved = definitions.get(ref_name)
             if resolved and isinstance(resolved, dict):
-                _seen.add(ref_path)
+                branch_seen = _seen | {ref_path}
                 merged = dict(resolved)
                 for k, v in node.items():
                     if k != "$ref":
                         merged[k] = v
-                return _resolve_refs(merged, definitions, _seen)
+                return _resolve_refs(merged, definitions, branch_seen)
 
     # Recurse into all dict/list children
     result = {}
@@ -394,7 +497,7 @@ async def add_endpoint(body: AddEndpointRequest = Body(description="Endpoint slu
     Accepts a model slug (e.g., 'fal-ai/flux-2-pro') or full URL.
     Auto-detects the provider (FAL.ai or Replicate) from the input.
     """
-    provider, endpoint_id = _parse_endpoint_input(body.endpoint_input)
+    provider, endpoint_id = _parse_endpoint_input(body.endpoint_input, body.provider_hint)
 
     # Check for duplicates
     entries = _load_endpoints()

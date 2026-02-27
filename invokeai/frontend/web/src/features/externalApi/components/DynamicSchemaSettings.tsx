@@ -85,9 +85,10 @@ type SchemaProperty = {
   anyOf?: Array<{ type?: string }>;
   oneOf?: Array<{ type?: string }>;
   $ref?: string;
-  items?: { type?: string; format?: string };
+  items?: { type?: string; format?: string; properties?: Record<string, SchemaProperty> };
   format?: string;
   maxItems?: number;
+  properties?: Record<string, SchemaProperty>;
 };
 
 type JsonSchema = {
@@ -111,6 +112,40 @@ function isImageField(key: string, prop: SchemaProperty): boolean {
     return true;
   }
   return false;
+}
+
+/** Detect if an object schema represents an RGB color ({r, g, b} integer properties). */
+function isRgbObjectSchema(props?: Record<string, SchemaProperty>): boolean {
+  if (!props) {
+    return false;
+  }
+  const keys = Object.keys(props);
+  return ['r', 'g', 'b'].every((k) => keys.includes(k));
+}
+
+/** Detect a single RGB color object field. */
+function isSingleColorField(prop: SchemaProperty): boolean {
+  return prop.type === 'object' && isRgbObjectSchema(prop.properties);
+}
+
+/** Detect an array-of-RGB-colors field (color palette). */
+function isColorArrayField(prop: SchemaProperty): boolean {
+  return prop.type === 'array' && !!prop.items && isRgbObjectSchema(prop.items.properties);
+}
+
+/** Convert {r,g,b} integers to #RRGGBB hex string. */
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Convert #RRGGBB hex string to {r,g,b} integers. */
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '');
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
 }
 
 /** Extract max image count from the description text, e.g. "Maximum 8 images". */
@@ -300,7 +335,15 @@ const DynamicField = memo(({ fieldKey, prop, schema }: DynamicFieldProps) => {
   if (prop.type === 'string') {
     return <StringField fieldKey={fieldKey} prop={prop} />;
   }
-  // Skip complex types (objects, arrays without image detection)
+  // Color palette: array of {r, g, b} objects
+  if (isColorArrayField(prop)) {
+    return <ColorArrayField fieldKey={fieldKey} prop={prop} />;
+  }
+  // Single color: {r, g, b} object
+  if (isSingleColorField(prop)) {
+    return <SingleColorField fieldKey={fieldKey} prop={prop} />;
+  }
+  // Skip other complex types (objects, arrays without image/color detection)
   return null;
 });
 
@@ -517,6 +560,198 @@ const NumberField = memo(({ fieldKey, prop }: FieldProps) => {
 });
 
 NumberField.displayName = 'NumberField';
+
+type RgbColor = { r: number; g: number; b: number };
+
+const SingleColorField = memo(({ fieldKey, prop }: FieldProps) => {
+  const dispatch = useAppDispatch();
+  const dynamicParams = useAppSelector(selectExternalApiDynamicParams);
+  const currentValue = (dynamicParams[fieldKey] as RgbColor | undefined) ?? null;
+  const hexValue = currentValue ? rgbToHex(currentValue.r, currentValue.g, currentValue.b) : '#000000';
+
+  const onChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const rgb = hexToRgb(e.target.value);
+      dispatch(externalApiDynamicParamChanged({ key: fieldKey, value: rgb }));
+    },
+    [dispatch, fieldKey]
+  );
+
+  const onClear = useCallback(() => {
+    dispatch(externalApiDynamicParamChanged({ key: fieldKey, value: null }));
+  }, [dispatch, fieldKey]);
+
+  return (
+    <FormControl>
+      <FormLabel>{prop.title ?? formatLabel(fieldKey)}</FormLabel>
+      <Flex alignItems="center" gap={2}>
+        <Box
+          as="label"
+          w="32px"
+          h="32px"
+          borderRadius="md"
+          borderWidth={1}
+          borderColor="base.600"
+          bg={hexValue}
+          cursor="pointer"
+          overflow="hidden"
+          flexShrink={0}
+        >
+          <input
+            type="color"
+            value={hexValue}
+            onChange={onChange}
+            style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+          />
+        </Box>
+        <Text fontSize="xs" color="base.400" fontFamily="mono">
+          {hexValue.toUpperCase()}
+        </Text>
+        {currentValue && (
+          <IconButton
+            aria-label="Clear"
+            icon={<PiTrashSimpleBold />}
+            size="xs"
+            variant="ghost"
+            onClick={onClear}
+          />
+        )}
+      </Flex>
+    </FormControl>
+  );
+});
+
+SingleColorField.displayName = 'SingleColorField';
+
+const ColorArrayField = memo(({ fieldKey, prop }: FieldProps) => {
+  const dispatch = useAppDispatch();
+  const dynamicParams = useAppSelector(selectExternalApiDynamicParams);
+  const colors = useMemo(
+    () => (dynamicParams[fieldKey] as RgbColor[] | undefined) ?? [],
+    [dynamicParams, fieldKey]
+  );
+
+  const onAddColor = useCallback(() => {
+    const newColors = [...colors, { r: 0, g: 0, b: 0 }];
+    dispatch(externalApiDynamicParamChanged({ key: fieldKey, value: newColors }));
+  }, [dispatch, fieldKey, colors]);
+
+  const onChangeColor = useCallback(
+    (index: number, hex: string) => {
+      const rgb = hexToRgb(hex);
+      const newColors = colors.map((c, i) => (i === index ? rgb : c));
+      dispatch(externalApiDynamicParamChanged({ key: fieldKey, value: newColors }));
+    },
+    [dispatch, fieldKey, colors]
+  );
+
+  const onRemoveColor = useCallback(
+    (index: number) => {
+      const newColors = colors.filter((_, i) => i !== index);
+      dispatch(externalApiDynamicParamChanged({ key: fieldKey, value: newColors }));
+    },
+    [dispatch, fieldKey, colors]
+  );
+
+  return (
+    <FormControl>
+      <FormLabel>{prop.title ?? formatLabel(fieldKey)}</FormLabel>
+      <Flex gap={2} flexWrap="wrap" alignItems="center">
+        {colors.map((color, i) => (
+          <ColorSwatch
+            key={i}
+            color={color}
+            index={i}
+            onChange={onChangeColor}
+            onRemove={onRemoveColor}
+          />
+        ))}
+        <Box
+          as="button"
+          w="32px"
+          h="32px"
+          borderRadius="md"
+          borderWidth={1}
+          borderColor="base.600"
+          borderStyle="dashed"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          cursor="pointer"
+          onClick={onAddColor}
+          _hover={{ borderColor: 'base.400' }}
+        >
+          <Text fontSize="lg" color="base.500" lineHeight={1}>
+            +
+          </Text>
+        </Box>
+      </Flex>
+    </FormControl>
+  );
+});
+
+ColorArrayField.displayName = 'ColorArrayField';
+
+type ColorSwatchProps = {
+  color: RgbColor;
+  index: number;
+  onChange: (index: number, hex: string) => void;
+  onRemove: (index: number) => void;
+};
+
+const ColorSwatch = memo(({ color, index, onChange, onRemove }: ColorSwatchProps) => {
+  const hexValue = rgbToHex(color.r, color.g, color.b);
+
+  const onColorChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      onChange(index, e.target.value);
+    },
+    [onChange, index]
+  );
+
+  const onRemoveClick = useCallback(() => {
+    onRemove(index);
+  }, [onRemove, index]);
+
+  return (
+    <Box position="relative">
+      <Box
+        as="label"
+        w="32px"
+        h="32px"
+        borderRadius="md"
+        borderWidth={1}
+        borderColor="base.600"
+        bg={hexValue}
+        cursor="pointer"
+        overflow="hidden"
+        display="block"
+      >
+        <input
+          type="color"
+          value={hexValue}
+          onChange={onColorChange}
+          style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+        />
+      </Box>
+      <IconButton
+        aria-label="Remove"
+        icon={<PiTrashSimpleBold />}
+        size="xs"
+        variant="ghost"
+        position="absolute"
+        top="-6px"
+        right="-6px"
+        minW="16px"
+        h="16px"
+        fontSize="8px"
+        onClick={onRemoveClick}
+      />
+    </Box>
+  );
+});
+
+ColorSwatch.displayName = 'ColorSwatch';
 
 const StringField = memo(({ fieldKey, prop }: FieldProps) => {
   const dispatch = useAppDispatch();

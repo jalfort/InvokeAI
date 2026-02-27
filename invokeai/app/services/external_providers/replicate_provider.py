@@ -70,13 +70,25 @@ class ReplicateDynamicProvider(BaseProvider):
             capability_type="image",
         )
 
-    def _get_version_for_model(self, model_id: str) -> str:
-        """Look up the cached model version hash for a Replicate endpoint."""
+    def _get_endpoint_for_model(self, model_id: str) -> dict:
+        """Look up the full cached endpoint dict for a Replicate model."""
         endpoints = self._load_replicate_endpoints()
         for ep in endpoints:
             if ep["endpoint_id"] == model_id:
-                return ep.get("model_version", "")
-        return ""
+                return ep
+        return {}
+
+    def _get_version_for_model(self, model_id: str) -> str:
+        """Look up the cached model version hash for a Replicate endpoint."""
+        ep = self._get_endpoint_for_model(model_id)
+        return ep.get("model_version", "")
+
+    def _schema_has_prompt(self, model_id: str) -> bool:
+        """Check if the cached schema has a 'prompt' input property."""
+        ep = self._get_endpoint_for_model(model_id)
+        schema = ep.get("cached_schema", {})
+        properties = schema.get("properties", {})
+        return "prompt" in properties
 
     async def generate(
         self,
@@ -93,8 +105,11 @@ class ReplicateDynamicProvider(BaseProvider):
 
         version = self._get_version_for_model(model_id)
 
-        # Build input
-        input_data: dict = {"prompt": prompt}
+        # Build input — only include prompt if the model's schema accepts it
+        input_data: dict = {}
+        if self._schema_has_prompt(model_id):
+            input_data["prompt"] = prompt
+
         if params.seed > 0:
             input_data["seed"] = params.seed
 
@@ -115,24 +130,47 @@ class ReplicateDynamicProvider(BaseProvider):
             "Content-Type": "application/json",
         }
 
-        # Build prediction request body
+        # Build prediction request body and choose the right endpoint.
+        # Replicate has two prediction APIs:
+        #   1. POST /v1/predictions (requires version hash — legacy/community models)
+        #   2. POST /v1/models/{owner}/{name}/predictions (uses latest — works for hidden versions)
+        # Some models use "hidden" versions that aren't callable by hash.
+        # Strategy: try model-based endpoint first (always works), fall back to version-based.
         body: dict = {"input": input_data}
-        if version:
-            body["version"] = version
-        else:
-            # If no version cached, use the model identifier directly
-            body["model"] = model_id
+        predict_url = f"https://api.replicate.com/v1/models/{model_id}/predictions"
 
         if progress_cb:
             progress_cb("Submitting to Replicate...", 0.2)
 
         async with httpx.AsyncClient(timeout=_MAX_WAIT) as client:
-            # Create prediction
-            resp = await client.post(
-                "https://api.replicate.com/v1/predictions",
-                json=body,
-                headers=headers,
-            )
+            resp = await client.post(predict_url, json=body, headers=headers)
+
+            # If model-based endpoint fails (404 = model not found), try version-based
+            if resp.status_code == 404 and version:
+                body["version"] = version
+                resp = await client.post(
+                    "https://api.replicate.com/v1/predictions",
+                    json=body,
+                    headers=headers,
+                )
+
+                # Auto-retry on stale version hash
+                if resp.status_code == 422:
+                    detail = resp.json().get("detail", "")
+                    if "version" in detail.lower() and ("not exist" in detail.lower() or "not found" in detail.lower()):
+                        from invokeai.app.api.routers.dynamic_endpoints import refresh_replicate_version
+
+                        if progress_cb:
+                            progress_cb("Refreshing model version...", 0.15)
+                        new_version = await refresh_replicate_version(model_id, api_key)
+                        if new_version and new_version != version:
+                            body["version"] = new_version
+                            resp = await client.post(
+                                "https://api.replicate.com/v1/predictions",
+                                json=body,
+                                headers=headers,
+                            )
+
             if resp.status_code == 422:
                 detail = resp.json().get("detail", "Invalid input parameters")
                 raise RuntimeError(f"Replicate rejected the request: {detail}")

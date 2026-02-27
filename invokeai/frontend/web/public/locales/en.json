@@ -1581,7 +1581,8 @@
         "endpointSettings": "Endpoint Settings",
         "displayName": "Display Name",
         "apiCategory": "API Category",
-        "customCategory": "Custom Category"
+        "customCategory": "Custom Category",
+        "clickToSwitch": "Click to switch"
     },
     "sdxl": {
         "cfgScale": "CFG Scale",

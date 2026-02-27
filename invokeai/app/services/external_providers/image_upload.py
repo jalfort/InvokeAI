@@ -70,8 +70,12 @@ async def upload_dynamic_images(
     provider: str,
     api_key: str,
     progress_cb: Optional[callable] = None,
-) -> dict[str, list[str]]:
-    """Upload all dynamic image params and return a dict of field_name → URL list.
+) -> dict[str, str | list[str]]:
+    """Upload all dynamic image params and return a dict of field_name → URL(s).
+
+    Single-image fields are returned as a plain string; multi-image fields
+    are returned as a list of strings.  This matches what most provider
+    schemas expect (e.g. Replicate's ``image: string`` vs ``images: [string]``).
 
     Args:
         dynamic_images: Dict of field_name → list of PIL images.
@@ -80,19 +84,21 @@ async def upload_dynamic_images(
         progress_cb: Optional progress callback.
 
     Returns:
-        Dict mapping field names to URL(s) suitable for the provider API.
+        Dict mapping field names to URL string or list of URL strings.
     """
     if not dynamic_images:
         return {}
 
     upload_fn = upload_image_to_fal if provider == "fal" else upload_image_to_replicate
-    result: dict[str, list[str]] = {}
+    result: dict[str, str | list[str]] = {}
 
     for field_name, images in dynamic_images.items():
         urls: list[str] = []
         for img in images:
             url = await upload_fn(img, api_key)
             urls.append(url)
-        result[field_name] = urls
+        # Unwrap single-element lists to a plain string — many schemas expect
+        # a single URL (e.g. Replicate's "image" field) rather than an array.
+        result[field_name] = urls[0] if len(urls) == 1 else urls
 
     return result

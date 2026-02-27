@@ -60,13 +60,23 @@ class GeminiProvider(BaseProvider):
         return await self._call_gemini(prompt, model_id, params, source_images, api_key, progress_cb)
 
     def get_capabilities(self, model_id: str) -> ProviderCapabilities:
-        is_pro = "3-pro" in model_id
+        # Resolution tiers by model:
+        #   NanoBanana 2 (3.1-flash): 0.5K through 4K
+        #   NanoBanana Pro (3-pro): 1K through 4K
+        #   NanoBanana Flash (2.5-flash): 1K and 2K
+        if "3.1-flash" in model_id:
+            resolutions = ["0.5K", "1K", "2K", "4K"]
+        elif "3-pro" in model_id:
+            resolutions = ["1K", "2K", "4K"]
+        else:
+            resolutions = ["1K", "2K"]
+
         return ProviderCapabilities(
             supports_refs_in_generate=True,
             supports_masks=False,
             max_refs=14,
             max_images_per_call=1,
-            supported_resolutions=["1K", "2K", "4K"] if is_pro else ["1K", "2K"],
+            supported_resolutions=resolutions,
             has_seed=False,
             has_guidance_scale=False,
             output_formats=["png"],
@@ -100,6 +110,12 @@ class GeminiProvider(BaseProvider):
                 name="NanoBanana (Flash)",
                 provider_id=self.provider_id,
                 description="Fast and efficient image generation. Supports 1K-2K resolution.",
+            ),
+            ModelInfo(
+                id="gemini-3.1-flash-image-preview",
+                name="NanoBanana 2 (Flash)",
+                provider_id=self.provider_id,
+                description="Next-gen flash model with 0.5K-4K resolution, character consistency, and extended aspect ratios.",
             ),
             ModelInfo(
                 id="gemini-3-pro-image-preview",

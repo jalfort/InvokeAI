@@ -39,6 +39,15 @@ class FalDynamicProvider(BaseProvider):
 
         return [ep for ep in _load_endpoints() if ep.get("provider") == "fal"]
 
+    def _schema_has_prompt(self, model_id: str) -> bool:
+        """Check if the cached schema has a 'prompt' input property."""
+        endpoints = self._load_fal_endpoints()
+        for ep in endpoints:
+            if ep["endpoint_id"] == model_id:
+                schema = ep.get("cached_schema", {})
+                return "prompt" in schema.get("properties", {})
+        return True  # Default to including prompt if endpoint not found
+
     def get_supported_models(self) -> list[ModelInfo]:
         """Return models from cached dynamic endpoints."""
         endpoints = self._load_fal_endpoints()
@@ -89,8 +98,10 @@ class FalDynamicProvider(BaseProvider):
         # Set the API key for fal_client
         os.environ["FAL_KEY"] = api_key
 
-        # Build arguments starting with the prompt
-        arguments: dict = {"prompt": prompt}
+        # Build arguments — only include prompt if the model's schema accepts it
+        arguments: dict = {}
+        if self._schema_has_prompt(model_id):
+            arguments["prompt"] = prompt
 
         # Add standard params that FAL models commonly accept
         if params.aspect_ratio and params.aspect_ratio != "auto":

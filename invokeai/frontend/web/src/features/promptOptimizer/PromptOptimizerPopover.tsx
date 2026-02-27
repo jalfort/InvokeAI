@@ -21,8 +21,9 @@ import {
   Tooltip,
 } from '@invoke-ai/ui-library';
 import { useAppSelector } from 'app/store/storeHooks';
+import { usePersistedTextAreaSize } from 'common/hooks/usePersistedTextareaSize';
 import { selectPositivePrompt } from 'features/controlLayers/store/paramsSlice';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PiArrowCounterClockwiseBold, PiCheckBold, PiGearSixBold } from 'react-icons/pi';
 import {
@@ -39,6 +40,31 @@ type OptimizationResult = {
   provider: string;
   model: string;
 };
+
+const resultTextareaPersistOptions: Parameters<typeof usePersistedTextAreaSize>[2] = {
+  trackWidth: false,
+  trackHeight: true,
+  initialHeight: 120,
+};
+
+const ResultTextarea = memo(({ text }: { text: string }) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  usePersistedTextAreaSize('promptOptimizerResult', textareaRef, resultTextareaPersistOptions);
+
+  return (
+    <Textarea
+      ref={textareaRef}
+      value={text}
+      readOnly
+      fontSize="sm"
+      minH="120px"
+      resize="vertical"
+      variant="darkFilled"
+    />
+  );
+});
+
+ResultTextarea.displayName = 'ResultTextarea';
 
 type Props = {
   onAccept: (optimizedPrompt: string) => void;
@@ -237,6 +263,7 @@ export const PromptOptimizerPopover = memo(({ onAccept }: Props) => {
                     <Tabs
                       variant="line"
                       size="sm"
+                      isLazy
                       index={activeTabIndex}
                       onChange={setActiveTabIndex}
                     >
@@ -255,14 +282,7 @@ export const PromptOptimizerPopover = memo(({ onAccept }: Props) => {
                       <TabPanels>
                         {results.map((result, i) => (
                           <TabPanel key={i} px={0} py={2}>
-                            <Textarea
-                              value={result.text}
-                              readOnly
-                              fontSize="sm"
-                              minH="120px"
-                              resize="vertical"
-                              variant="darkFilled"
-                            />
+                            <ResultTextarea text={result.text} />
                             <Text fontSize="xs" color="base.500" mt={1}>
                               {result.provider} / {result.model}
                             </Text>
