@@ -1574,7 +1574,14 @@
         "rename": "Rename",
         "refreshSchema": "Refresh Schema",
         "deleteEndpoint": "Delete Endpoint",
-        "sortBy": "Sort"
+        "sortBy": "Sort",
+        "category": "Category",
+        "uncategorized": "Uncategorized",
+        "createCategory": "Create \"{{name}}\"",
+        "endpointSettings": "Endpoint Settings",
+        "displayName": "Display Name",
+        "apiCategory": "API Category",
+        "customCategory": "Custom Category"
     },
     "sdxl": {
         "cfgScale": "CFG Scale",

@@ -1,14 +1,12 @@
 import type { ComboboxOnChange, ComboboxOption } from '@invoke-ai/ui-library';
 import {
   Badge,
-  Button,
   Combobox,
   CompositeNumberInput,
   Flex,
   FormControl,
   FormLabel,
   IconButton,
-  Input,
   Switch,
   Text,
   Tooltip,
@@ -17,6 +15,7 @@ import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import type { GroupBase } from 'chakra-react-select';
 import { AddEndpointModal } from 'features/externalApi/components/AddEndpointModal';
 import { DynamicSchemaSettings } from 'features/externalApi/components/DynamicSchemaSettings';
+import { EndpointSettingsPopover } from 'features/externalApi/components/EndpointSettingsPopover';
 import { ExternalApiReferenceImages } from 'features/externalApi/components/ExternalApiReferenceImages';
 import { useExternalApiAutoMode } from 'features/externalApi/hooks/useExternalApiAutoMode';
 import type {
@@ -47,23 +46,15 @@ import {
   selectExternalApiSafetyTolerance,
   selectExternalApiSortBy,
 } from 'features/externalApi/store/externalApiSlice';
-import type { ChangeEvent, KeyboardEvent } from 'react';
+import type { ChangeEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PiArrowsClockwiseBold, PiPlusBold } from 'react-icons/pi';
 import {
-  PiArrowsClockwiseBold,
-  PiFloppyDiskBold,
-  PiPlusBold,
-  PiTrashSimpleBold,
-  PiXBold,
-} from 'react-icons/pi';
-import {
-  useDeleteDynamicEndpointMutation,
   useGetDynamicEndpointsQuery,
   useGetExternalApiModelsQuery,
   useGetExternalApiProvidersQuery,
   useRefreshDynamicEndpointMutation,
-  useRenameDynamicEndpointMutation,
 } from 'services/api/endpoints/externalApi';
 
 /** Sentinel value for the "Add Endpoint..." option in the model dropdown. */
@@ -102,7 +93,7 @@ const FALLBACK_MODEL_OPTIONS: ComboboxOption[] = [
 const SORT_OPTIONS: ComboboxOption[] = [
   { value: 'provider', label: 'Provider' },
   { value: 'api_category', label: 'API Category' },
-  { value: 'user_category', label: 'My Categories' },
+  { value: 'user_category', label: 'Custom Categories' },
 ];
 
 /** Provider display order — hardcoded providers first. */
@@ -136,12 +127,6 @@ export const ExternalApiSettings = memo(() => {
   const openAddEndpoint = useCallback(() => setIsAddEndpointOpen(true), []);
   const closeAddEndpoint = useCallback(() => setIsAddEndpointOpen(false), []);
 
-  // Rename state for dynamic endpoints
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-
-  const [renameEndpoint] = useRenameDynamicEndpointMutation();
-  const [deleteEndpoint] = useDeleteDynamicEndpointMutation();
   const [refreshEndpoint, { isLoading: isRefreshing }] = useRefreshDynamicEndpointMutation();
 
   // Check if selected model is dynamic
@@ -379,56 +364,41 @@ export const ExternalApiSettings = memo(() => {
     [dispatch]
   );
 
-  // --- Dynamic endpoint management callbacks ---
-  const startRename = useCallback(() => {
-    if (selectedEndpoint) {
-      setRenamingId(selectedEndpoint.id);
-      setRenameValue(selectedEndpoint.display_name);
-    }
-  }, [selectedEndpoint]);
-
-  const cancelRename = useCallback(() => {
-    setRenamingId(null);
-    setRenameValue('');
-  }, []);
-
-  const submitRename = useCallback(async () => {
-    if (renamingId && renameValue.trim()) {
-      await renameEndpoint({ id: renamingId, display_name: renameValue.trim() });
-      setRenamingId(null);
-      setRenameValue('');
-    }
-  }, [renamingId, renameValue, renameEndpoint]);
-
-  const onRenameKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        submitRename();
-      } else if (e.key === 'Escape') {
-        cancelRename();
-      }
-    },
-    [submitRename, cancelRename]
-  );
-
-  const onRenameChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    setRenameValue(e.target.value);
-  }, []);
-
   const doRefresh = useCallback(async () => {
     if (selectedEndpoint) {
       await refreshEndpoint({ id: selectedEndpoint.id });
     }
   }, [selectedEndpoint, refreshEndpoint]);
 
-  const doDelete = useCallback(async () => {
-    if (selectedEndpoint) {
-      await deleteEndpoint({ id: selectedEndpoint.id });
+  // Collect unique category suggestions from all endpoints for the settings popover
+  const apiCategorySuggestions = useMemo(() => {
+    if (!endpointsData?.endpoints) {
+      return [];
     }
-  }, [selectedEndpoint, deleteEndpoint]);
+    const cats = new Set<string>();
+    for (const ep of endpointsData.endpoints) {
+      if (ep.api_category) {
+        cats.add(ep.api_category);
+      }
+    }
+    return Array.from(cats).sort();
+  }, [endpointsData]);
+
+  const customCategorySuggestions = useMemo(() => {
+    if (!endpointsData?.endpoints) {
+      return [];
+    }
+    const cats = new Set<string>();
+    for (const ep of endpointsData.endpoints) {
+      if (ep.user_category) {
+        cats.add(ep.user_category);
+      }
+    }
+    return Array.from(cats).sort();
+  }, [endpointsData]);
 
   return (
-    <Flex flexDir="column" gap={3}>
+    <Flex flexDir="column" gap={3} pb={3}>
       {/* Sort toggle */}
       <Flex alignItems="center" gap={2}>
         <Text fontSize="xs" color="base.500" flexShrink={0}>
@@ -466,60 +436,21 @@ export const ExternalApiSettings = memo(() => {
             </Text>
           )}
           <Flex ml="auto" gap={0}>
-            {renamingId === selectedEndpoint.id ? (
-              <Flex gap={1} alignItems="center">
-                <Input
-                  value={renameValue}
-                  onChange={onRenameChange}
-                  onKeyDown={onRenameKeyDown}
-                  size="xs"
-                  w="140px"
-                  autoFocus
-                />
-                <IconButton
-                  aria-label={t('common.save')}
-                  icon={<PiFloppyDiskBold />}
-                  size="xs"
-                  variant="ghost"
-                  onClick={submitRename}
-                />
-                <IconButton
-                  aria-label={t('common.cancel')}
-                  icon={<PiXBold />}
-                  size="xs"
-                  variant="ghost"
-                  onClick={cancelRename}
-                />
-              </Flex>
-            ) : (
-              <>
-                <Tooltip label={t('externalApi.rename')}>
-                  <Button size="xs" variant="link" onClick={startRename} fontSize="2xs" color="base.500">
-                    {t('externalApi.rename')}
-                  </Button>
-                </Tooltip>
-                <Tooltip label={t('externalApi.refreshSchema')}>
-                  <IconButton
-                    aria-label={t('externalApi.refreshSchema')}
-                    icon={<PiArrowsClockwiseBold />}
-                    size="xs"
-                    variant="ghost"
-                    onClick={doRefresh}
-                    isLoading={isRefreshing}
-                  />
-                </Tooltip>
-                <Tooltip label={t('externalApi.deleteEndpoint')}>
-                  <IconButton
-                    aria-label={t('externalApi.deleteEndpoint')}
-                    icon={<PiTrashSimpleBold />}
-                    size="xs"
-                    variant="ghost"
-                    colorScheme="error"
-                    onClick={doDelete}
-                  />
-                </Tooltip>
-              </>
-            )}
+            <EndpointSettingsPopover
+              endpoint={selectedEndpoint}
+              apiCategorySuggestions={apiCategorySuggestions}
+              customCategorySuggestions={customCategorySuggestions}
+            />
+            <Tooltip label={t('externalApi.refreshSchema')}>
+              <IconButton
+                aria-label={t('externalApi.refreshSchema')}
+                icon={<PiArrowsClockwiseBold />}
+                size="xs"
+                variant="ghost"
+                onClick={doRefresh}
+                isLoading={isRefreshing}
+              />
+            </Tooltip>
           </Flex>
         </Flex>
       )}

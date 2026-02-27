@@ -70,6 +70,15 @@ class SetCategoryRequest(BaseModel):
     user_category: str = Field(description="New user category (empty string to clear)")
 
 
+class UpdateEndpointRequest(BaseModel):
+    """Request to update one or more fields of a dynamic endpoint."""
+
+    id: str = Field(description="Endpoint UUID to update")
+    display_name: Optional[str] = Field(default=None, description="New display name (None = keep current)")
+    api_category: Optional[str] = Field(default=None, description="New API category (None = keep current)")
+    user_category: Optional[str] = Field(default=None, description="New user category (None = keep current)")
+
+
 class RefreshEndpointRequest(BaseModel):
     """Request to re-fetch the schema for a dynamic endpoint."""
 
@@ -463,6 +472,31 @@ async def set_category(body: SetCategoryRequest = Body(description="Category cha
 
 
 @dynamic_endpoints_router.post(
+    "/update",
+    operation_id="update_dynamic_endpoint",
+    status_code=200,
+    response_model=DynamicEndpoint,
+)
+async def update_endpoint(body: UpdateEndpointRequest = Body(description="Update request")) -> DynamicEndpoint:
+    """Update one or more fields of a dynamic endpoint in a single call."""
+    entries = _load_endpoints()
+    ep = _find_endpoint(entries, body.id)
+    if not ep:
+        raise HTTPException(status_code=404, detail=f"Endpoint '{body.id}' not found.")
+
+    if body.display_name is not None:
+        ep["display_name"] = body.display_name.strip()
+    if body.api_category is not None:
+        ep["api_category"] = body.api_category.strip()
+    if body.user_category is not None:
+        ep["user_category"] = body.user_category.strip()
+
+    _save_endpoints(entries)
+
+    return DynamicEndpoint(**ep)
+
+
+@dynamic_endpoints_router.post(
     "/refresh",
     operation_id="refresh_dynamic_endpoint",
     status_code=200,
@@ -481,16 +515,17 @@ async def refresh_endpoint(body: RefreshEndpointRequest = Body(description="Refr
     if provider == "fal":
         display_name, api_category, schema = await _fetch_fal_schema(endpoint_id)
         ep["cached_schema"] = schema
-        ep["api_category"] = api_category
-        # Only update display name if it was auto-generated (not user-renamed)
-        # We keep the user's custom name if they renamed it
+        # Only overwrite api_category if the API returned one; preserve user's manual override otherwise
+        if api_category:
+            ep["api_category"] = api_category
     else:
         api_key = _get_provider_key("replicate")
         if not api_key:
             raise HTTPException(status_code=400, detail="Replicate API key required for schema refresh.")
         display_name, api_category, schema, model_version = await _fetch_replicate_schema(endpoint_id, api_key)
         ep["cached_schema"] = schema
-        ep["api_category"] = api_category
+        if api_category:
+            ep["api_category"] = api_category
         ep["model_version"] = model_version
 
     ep["cached_at"] = datetime.now(timezone.utc).isoformat()

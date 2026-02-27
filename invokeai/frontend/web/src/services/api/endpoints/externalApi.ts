@@ -169,6 +169,13 @@ type RefreshEndpointRequest = {
   id: string;
 };
 
+type UpdateEndpointRequest = {
+  id: string;
+  display_name?: string;
+  api_category?: string;
+  user_category?: string;
+};
+
 type DeleteEndpointRequest = {
   id: string;
 };
@@ -298,6 +305,14 @@ export const externalApiEndpoints = api.injectEndpoints({
       }),
       invalidatesTags: ['DynamicEndpoints'],
     }),
+    updateDynamicEndpoint: build.mutation<DynamicEndpoint, UpdateEndpointRequest>({
+      query: (body) => ({
+        url: buildDynamicEndpointsUrl('update'),
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DynamicEndpoints', 'ExternalApiProviders'],
+    }),
     refreshDynamicEndpoint: build.mutation<DynamicEndpoint, RefreshEndpointRequest>({
       query: (body) => ({
         url: buildDynamicEndpointsUrl('refresh'),
@@ -334,6 +349,7 @@ export const {
   useAddDynamicEndpointMutation,
   useRenameDynamicEndpointMutation,
   useSetDynamicEndpointCategoryMutation,
+  useUpdateDynamicEndpointMutation,
   useRefreshDynamicEndpointMutation,
   useDeleteDynamicEndpointMutation,
 } = externalApiEndpoints;
