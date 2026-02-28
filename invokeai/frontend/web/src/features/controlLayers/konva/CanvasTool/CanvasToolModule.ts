@@ -168,6 +168,12 @@ export class CanvasToolModule extends CanvasModuleBase {
         if (oldTool === 'selection' && newTool !== 'selection') {
           this.tools.selection.clearSelection();
         }
+        // Enable/disable annotation shape listening when switching to/from annotate tool
+        if (newTool === 'annotate' && oldTool !== 'annotate') {
+          this.tools.annotate.enableShapeListening();
+        } else if (oldTool === 'annotate' && newTool !== 'annotate') {
+          this.tools.annotate.disableShapeListening();
+        }
         this.render();
       })
     );
@@ -745,6 +751,11 @@ export class CanvasToolModule extends CanvasModuleBase {
         e.preventDefault();
         return;
       }
+    }
+
+    // --- Annotation tool keyboard shortcuts ---
+    if (this.$tool.get() === 'annotate') {
+      this.tools.annotate.onKeyDown(e);
     }
 
     if (e.key === KEY_ESCAPE) {

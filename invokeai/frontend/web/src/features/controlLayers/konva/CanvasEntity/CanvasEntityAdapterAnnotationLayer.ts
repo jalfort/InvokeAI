@@ -342,6 +342,24 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
     return this.konva.objectGroup.toCanvas({ pixelRatio: 1 });
   };
 
+  /**
+   * Returns a Konva shape by its annotation object ID, or null if not found.
+   */
+  getShapeById = (objectId: string): Konva.Shape | null => {
+    return this.shapeMap.get(objectId) ?? null;
+  };
+
+  /**
+   * Enables or disables listening (hit detection) on all annotation shapes.
+   * Also toggles the layer's listening property so hit-tests work.
+   */
+  setShapeListening = (enabled: boolean) => {
+    this.konva.layer.listening(enabled);
+    for (const shape of this.shapeMap.values()) {
+      shape.listening(enabled);
+    }
+  };
+
   repr = () => {
     return {
       id: this.id,

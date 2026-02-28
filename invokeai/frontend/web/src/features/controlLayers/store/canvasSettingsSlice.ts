@@ -174,9 +174,9 @@ const zCanvasSettingsState = z.object({
    */
   annotationMode: zAnnotationMode.default('arrow'),
   /**
-   * The annotation stroke color (hex).
+   * The annotation stroke color (RGBA).
    */
-  annotationColor: z.string().default('#ff0000'),
+  annotationColor: zRgbaColor.default({ r: 255, g: 0, b: 0, a: 1 }),
   /**
    * The annotation stroke width for line/arrow/rect/ellipse.
    */
@@ -229,7 +229,7 @@ const getInitialState = (): CanvasSettingsState => ({
   selectionOverlayOpacity: 0.5,
   selectionOverlayColor: { r: 220, g: 40, b: 40 },
   annotationMode: 'arrow',
-  annotationColor: '#ff0000',
+  annotationColor: { r: 255, g: 0, b: 0, a: 1 },
   annotationStrokeWidth: 3,
   annotationFontSize: 16,
   annotationFontFamily: 'sans-serif',
@@ -372,7 +372,7 @@ const slice = createSlice({
     settingsAnnotationModeChanged: (state, action: PayloadAction<CanvasSettingsState['annotationMode']>) => {
       state.annotationMode = action.payload;
     },
-    settingsAnnotationColorChanged: (state, action: PayloadAction<CanvasSettingsState['annotationColor']>) => {
+    settingsAnnotationColorChanged: (state, action: PayloadAction<RgbaColor>) => {
       state.annotationColor = action.payload;
     },
     settingsAnnotationStrokeWidthChanged: (state, action: PayloadAction<CanvasSettingsState['annotationStrokeWidth']>) => {

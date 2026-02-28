@@ -1,5 +1,21 @@
-import { Box, ButtonGroup, CompositeNumberInput, Flex, IconButton, Text, Tooltip } from '@invoke-ai/ui-library';
+import {
+  Box,
+  ButtonGroup,
+  CompositeNumberInput,
+  Flex,
+  IconButton,
+  Popover,
+  PopoverArrow,
+  PopoverBody,
+  PopoverContent,
+  PopoverTrigger,
+  Portal,
+  Text,
+  Tooltip,
+} from '@invoke-ai/ui-library';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
+import RgbaColorPicker from 'common/components/ColorPicker/RgbaColorPicker';
+import { rgbaColorToString } from 'common/util/colorCodeTransformers';
 import type { AnnotationMode } from 'features/controlLayers/store/canvasSettingsSlice';
 import {
   selectAnnotationColor,
@@ -11,7 +27,7 @@ import {
   settingsAnnotationModeChanged,
   settingsAnnotationStrokeWidthChanged,
 } from 'features/controlLayers/store/canvasSettingsSlice';
-import type { ChangeEvent } from 'react';
+import type { RgbaColor } from 'features/controlLayers/store/types';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -41,8 +57,8 @@ export const ToolAnnotateSettings = memo(() => {
   );
 
   const onColorChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      dispatch(settingsAnnotationColorChanged(e.target.value));
+    (color: RgbaColor) => {
+      dispatch(settingsAnnotationColorChanged(color));
     },
     [dispatch]
   );
@@ -113,36 +129,30 @@ export const ToolAnnotateSettings = memo(() => {
       </ButtonGroup>
 
       {/* Color Picker */}
-      <Flex alignItems="center" gap={1}>
-        <Text fontSize="xs" color="base.400" whiteSpace="nowrap">
-          {t('controlLayers.annotate.color')}
-        </Text>
-        <Box
-          as="label"
-          cursor="pointer"
-          w={6}
-          h={6}
-          borderRadius="full"
-          borderWidth={2}
-          borderColor="base.600"
-          bg={annotationColor}
-          position="relative"
-          overflow="hidden"
-        >
-          <Box
-            as="input"
-            type="color"
-            value={annotationColor}
-            onChange={onColorChange}
-            position="absolute"
-            inset={0}
-            w="200%"
-            h="200%"
-            opacity={0}
-            cursor="pointer"
-          />
-        </Box>
-      </Flex>
+      <Popover isLazy closeOnBlur={true} closeOnEsc={true} returnFocusOnClose={true}>
+        <PopoverTrigger>
+          <Flex role="button" aria-label={t('controlLayers.annotate.color')} tabIndex={-1} cursor="pointer">
+            <Tooltip label={t('controlLayers.annotate.color')}>
+              <Box
+                w={6}
+                h={6}
+                borderRadius="full"
+                borderWidth={2}
+                borderColor="base.600"
+                bg={rgbaColorToString(annotationColor)}
+              />
+            </Tooltip>
+          </Flex>
+        </PopoverTrigger>
+        <Portal>
+          <PopoverContent minW={96}>
+            <PopoverArrow />
+            <PopoverBody minH={64}>
+              <RgbaColorPicker color={annotationColor} onChange={onColorChange} withNumberInput withSwatches />
+            </PopoverBody>
+          </PopoverContent>
+        </Portal>
+      </Popover>
 
       {/* Stroke Width (line/arrow/rect/ellipse) */}
       {annotationMode !== 'text' && (
