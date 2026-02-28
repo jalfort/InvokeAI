@@ -333,6 +333,8 @@ export const AnnotationTextOverlay = memo(() => {
             step={2}
             value={fontSize}
             onChange={onFontSizeChange}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
             style={{
               width: 44,
               height: 26,
