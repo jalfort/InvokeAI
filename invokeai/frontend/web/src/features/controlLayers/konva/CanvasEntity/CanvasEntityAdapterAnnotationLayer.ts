@@ -1,4 +1,5 @@
 import { createSelector } from '@reduxjs/toolkit';
+import { rgbaColorToString } from 'common/util/colorCodeTransformers';
 import { deepClone } from 'common/util/deepClone';
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
@@ -40,7 +41,10 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
   /**
    * Map from annotation object ID to its Konva shape node, for O(1) lookup during sync.
    */
-  private shapeMap = new Map<string, Konva.Shape>();
+  private shapeMap = new Map<string, Konva.Shape | Konva.Label>();
+
+  /** Whether shapes should have listening enabled (set by annotation tool on activate/deactivate) */
+  private shapesListening = false;
 
   $isDisabled = atom(false);
   $isEntityTypeHidden = atom(false);
@@ -153,6 +157,7 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
       } else {
         const shape = this.createShape(obj);
         if (shape) {
+          shape.listening(this.shapesListening);
           this.konva.objectGroup.add(shape);
           this.shapeMap.set(obj.id, shape);
         }
@@ -163,7 +168,8 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
   /**
    * Creates a Konva shape from an annotation object.
    */
-  createShape = (obj: AnnotationObject): Konva.Shape | null => {
+  createShape = (obj: AnnotationObject): Konva.Shape | Konva.Label | null => {
+    const rotation = obj.rotation ?? 0;
     switch (obj.type) {
       case 'annotation_line':
         return new Konva.Line({
@@ -171,6 +177,7 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
           points: obj.points,
           stroke: obj.color,
           strokeWidth: obj.strokeWidth,
+          rotation,
           lineCap: 'round',
           lineJoin: 'round',
           hitStrokeWidth: 10,
@@ -183,6 +190,7 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
           stroke: obj.color,
           strokeWidth: obj.strokeWidth,
           fill: obj.color,
+          rotation,
           lineCap: 'round',
           lineJoin: 'round',
           pointerLength: obj.strokeWidth * 4,
@@ -190,16 +198,41 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
           hitStrokeWidth: 10,
         });
 
-      case 'annotation_text':
-        return new Konva.Text({
+      case 'annotation_text': {
+        const bgEnabled = obj.backgroundEnabled ?? false;
+        const bgColor = obj.backgroundColor
+          ? rgbaColorToString(obj.backgroundColor)
+          : 'rgba(0, 0, 0, 0.8)';
+        const padding = obj.padding ?? 8;
+
+        const label = new Konva.Label({
           id: obj.id,
           x: obj.position.x,
           y: obj.position.y,
-          text: obj.text,
-          fill: obj.color,
-          fontSize: obj.fontSize,
-          fontFamily: obj.fontFamily,
+          rotation,
         });
+
+        label.add(
+          new Konva.Tag({
+            fill: bgEnabled ? bgColor : 'transparent',
+            cornerRadius: 4,
+          })
+        );
+
+        label.add(
+          new Konva.Text({
+            text: obj.text,
+            fill: obj.color,
+            fontSize: obj.fontSize,
+            fontFamily: obj.fontFamily,
+            fontStyle: obj.fontStyle ?? 'normal',
+            padding,
+            lineHeight: 1.2,
+          })
+        );
+
+        return label;
+      }
 
       case 'annotation_rect':
         return new Konva.Rect({
@@ -210,6 +243,7 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
           height: obj.height,
           stroke: obj.color,
           strokeWidth: obj.strokeWidth,
+          rotation,
           hitStrokeWidth: 10,
         });
 
@@ -222,6 +256,7 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
           radiusY: obj.radiusY,
           stroke: obj.color,
           strokeWidth: obj.strokeWidth,
+          rotation,
           hitStrokeWidth: 10,
         });
 
@@ -233,46 +268,64 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
   /**
    * Updates an existing Konva shape to match the annotation object state.
    */
-  updateShape = (shape: Konva.Shape, obj: AnnotationObject) => {
+  updateShape = (node: Konva.Shape | Konva.Label, obj: AnnotationObject) => {
+    node.rotation(obj.rotation ?? 0);
     switch (obj.type) {
       case 'annotation_line':
-        (shape as Konva.Line).points(obj.points);
-        shape.stroke(obj.color);
-        shape.strokeWidth(obj.strokeWidth);
+        node.x(0);
+        node.y(0);
+        (node as Konva.Line).points(obj.points);
+        (node as Konva.Shape).stroke(obj.color);
+        (node as Konva.Shape).strokeWidth(obj.strokeWidth);
         break;
 
       case 'annotation_arrow':
-        (shape as Konva.Arrow).points(obj.points);
-        shape.stroke(obj.color);
-        shape.fill(obj.color);
-        shape.strokeWidth(obj.strokeWidth);
+        node.x(0);
+        node.y(0);
+        (node as Konva.Arrow).points(obj.points);
+        (node as Konva.Shape).stroke(obj.color);
+        (node as Konva.Shape).fill(obj.color);
+        (node as Konva.Shape).strokeWidth(obj.strokeWidth);
         break;
 
-      case 'annotation_text':
-        shape.x(obj.position.x);
-        shape.y(obj.position.y);
-        (shape as Konva.Text).text(obj.text);
-        shape.fill(obj.color);
-        (shape as Konva.Text).fontSize(obj.fontSize);
-        (shape as Konva.Text).fontFamily(obj.fontFamily);
+      case 'annotation_text': {
+        const label = node as Konva.Label;
+        label.x(obj.position.x);
+        label.y(obj.position.y);
+
+        const textNode = label.getText() as Konva.Text;
+        textNode.text(obj.text);
+        textNode.fill(obj.color);
+        textNode.fontSize(obj.fontSize);
+        textNode.fontFamily(obj.fontFamily);
+        textNode.fontStyle(obj.fontStyle ?? 'normal');
+        textNode.padding(obj.padding ?? 8);
+
+        const tag = label.getTag() as Konva.Tag;
+        const bgEnabled = obj.backgroundEnabled ?? false;
+        const bgColor = obj.backgroundColor
+          ? rgbaColorToString(obj.backgroundColor)
+          : 'rgba(0, 0, 0, 0.8)';
+        tag.fill(bgEnabled ? bgColor : 'transparent');
         break;
+      }
 
       case 'annotation_rect':
-        shape.x(obj.position.x);
-        shape.y(obj.position.y);
-        (shape as Konva.Rect).width(obj.width);
-        (shape as Konva.Rect).height(obj.height);
-        shape.stroke(obj.color);
-        shape.strokeWidth(obj.strokeWidth);
+        node.x(obj.position.x);
+        node.y(obj.position.y);
+        (node as Konva.Rect).width(obj.width);
+        (node as Konva.Rect).height(obj.height);
+        (node as Konva.Shape).stroke(obj.color);
+        (node as Konva.Shape).strokeWidth(obj.strokeWidth);
         break;
 
       case 'annotation_ellipse':
-        shape.x(obj.position.x);
-        shape.y(obj.position.y);
-        (shape as Konva.Ellipse).radiusX(obj.radiusX);
-        (shape as Konva.Ellipse).radiusY(obj.radiusY);
-        shape.stroke(obj.color);
-        shape.strokeWidth(obj.strokeWidth);
+        node.x(obj.position.x);
+        node.y(obj.position.y);
+        (node as Konva.Ellipse).radiusX(obj.radiusX);
+        (node as Konva.Ellipse).radiusY(obj.radiusY);
+        (node as Konva.Shape).stroke(obj.color);
+        (node as Konva.Shape).strokeWidth(obj.strokeWidth);
         break;
     }
   };
@@ -345,7 +398,7 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
   /**
    * Returns a Konva shape by its annotation object ID, or null if not found.
    */
-  getShapeById = (objectId: string): Konva.Shape | null => {
+  getShapeById = (objectId: string): Konva.Shape | Konva.Label | null => {
     return this.shapeMap.get(objectId) ?? null;
   };
 
@@ -354,6 +407,7 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
    * Also toggles the layer's listening property so hit-tests work.
    */
   setShapeListening = (enabled: boolean) => {
+    this.shapesListening = enabled;
     this.konva.layer.listening(enabled);
     for (const shape of this.shapeMap.values()) {
       shape.listening(enabled);
@@ -377,6 +431,10 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
     this.log.debug('Destroying annotation layer adapter');
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
+    // Detach all children from the objectGroup WITHOUT destroying them first.
+    // The annotation tool's shared Transformer may be a child — removing (not destroying)
+    // it here preserves it for use with other annotation layer adapters.
+    this.konva.objectGroup.removeChildren();
     for (const shape of this.shapeMap.values()) {
       shape.destroy();
     }

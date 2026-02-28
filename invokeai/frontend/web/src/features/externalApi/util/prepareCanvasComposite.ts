@@ -11,8 +11,9 @@ const EXTERNAL_API_DOWNSCALE_FACTOR = 0.75;
  * Prepares the canvas composite for external API submission:
  * 1. Composites visible raster layers within the bbox
  * 2. Checks for transparency — if found, shows Fill White/Black/Cancel dialog
- * 3. Downscales to 75% to force the API to regenerate detail at output resolution
- * 4. Uploads and returns ImageDTO
+ * 3. Overlays annotation layers (text, arrows, shapes) onto the composite
+ * 4. Downscales to 75% to force the API to regenerate detail at output resolution
+ * 5. Uploads and returns ImageDTO
  *
  * Returns null if no visible raster content exists.
  * Throws GenerationCancelledError if user cancels the transparency dialog.
@@ -46,6 +47,9 @@ export const prepareCanvasComposite = async (manager: CanvasManager, rect: Rect)
     ctx.drawImage(compositeCanvas, 0, 0);
     processedCanvas = flattened;
   }
+
+  // Overlay annotations (text, arrows, shapes) on top of the raster composite
+  manager.compositor.overlayAnnotationsOnCanvas(processedCanvas, rect);
 
   // Downscale to 75% — forces the API to regenerate detail at its configured output resolution
   // rather than passing through the same pixels, preventing quality degradation on iterative edits

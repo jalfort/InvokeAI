@@ -214,6 +214,8 @@ export class CanvasToolModule extends CanvasModuleBase {
       this.tools.colorPicker.syncCursorStyle();
     } else if (tool === 'text') {
       this.tools.text.syncCursorStyle();
+    } else if (tool === 'annotate') {
+      this.tools.annotate.syncCursorStyle();
     } else if (selectedEntityAdapter) {
       if (selectedEntityAdapter.$isDisabled.get()) {
         stage.setCursor('not-allowed');
@@ -239,9 +241,6 @@ export class CanvasToolModule extends CanvasModuleBase {
     } else if (tool === 'selection') {
       // Selection tool always shows crosshair regardless of entity state
       this.tools.selection.syncCursorStyle();
-    } else if (tool === 'annotate') {
-      // Annotation tool always shows crosshair regardless of entity state
-      this.tools.annotate.syncCursorStyle();
     } else if (this.manager.stateApi.getRenderedEntityCount() === 0) {
       stage.setCursor('not-allowed');
     } else {
@@ -423,6 +422,17 @@ export class CanvasToolModule extends CanvasModuleBase {
   };
 
   onStagePointerDown = async (e: KonvaEventObject<PointerEvent>) => {
+    // Annotation tool handles clicks on its own shapes (for selection/manipulation),
+    // so it must be dispatched BEFORE the e.target !== stage guard.
+    if (this.$tool.get() === 'annotate') {
+      this.$lastPointerType.set(e.evt.pointerType);
+      this.$isPrimaryPointerDown.set(getIsPrimaryMouseDown(e));
+      this.syncCursorPositions();
+      await this.tools.annotate.onStagePointerDown(e);
+      this.render();
+      return;
+    }
+
     if (e.target !== this.konva.stage) {
       return;
     }
@@ -437,14 +447,6 @@ export class CanvasToolModule extends CanvasModuleBase {
         this.$isPrimaryPointerDown.set(getIsPrimaryMouseDown(e));
         this.syncCursorPositions();
         await this.tools.selection.onStagePointerDown(e);
-        return;
-      }
-
-      // Annotation tool works as an overlay and doesn't require getCanDraw()
-      if (tool === 'annotate') {
-        this.$isPrimaryPointerDown.set(getIsPrimaryMouseDown(e));
-        this.syncCursorPositions();
-        await this.tools.annotate.onStagePointerDown(e);
         return;
       }
 
@@ -475,6 +477,14 @@ export class CanvasToolModule extends CanvasModuleBase {
   };
 
   onStagePointerUp = (e: KonvaEventObject<PointerEvent>) => {
+    // Annotation tool handles pointer up on its own shapes, so dispatch before guard.
+    if (this.$tool.get() === 'annotate') {
+      this.$lastPointerType.set(e.evt.pointerType);
+      this.tools.annotate.onStagePointerUp(e);
+      this.render();
+      return;
+    }
+
     if (e.target !== this.konva.stage) {
       return;
     }
@@ -491,12 +501,6 @@ export class CanvasToolModule extends CanvasModuleBase {
       // Selection tool works as an ephemeral overlay and doesn't require getCanDraw()
       if (tool === 'selection') {
         this.tools.selection.onStagePointerUp(e);
-        return;
-      }
-
-      // Annotation tool works as an overlay and doesn't require getCanDraw()
-      if (tool === 'annotate') {
-        this.tools.annotate.onStagePointerUp(e);
         return;
       }
 
@@ -521,6 +525,15 @@ export class CanvasToolModule extends CanvasModuleBase {
   };
 
   onStagePointerMove = async (e: KonvaEventObject<PointerEvent>) => {
+    // Annotation tool handles pointer move on its own shapes, so dispatch before guard.
+    if (this.$tool.get() === 'annotate') {
+      this.$lastPointerType.set(e.evt.pointerType);
+      this.syncCursorPositions();
+      await this.tools.annotate.onStagePointerMove(e);
+      this.render();
+      return;
+    }
+
     if (e.target !== this.konva.stage) {
       return;
     }
@@ -540,12 +553,6 @@ export class CanvasToolModule extends CanvasModuleBase {
       // Selection tool works as an ephemeral overlay and doesn't require getCanDraw()
       if (tool === 'selection') {
         await this.tools.selection.onStagePointerMove(e);
-        return;
-      }
-
-      // Annotation tool works as an overlay and doesn't require getCanDraw()
-      if (tool === 'annotate') {
-        await this.tools.annotate.onStagePointerMove(e);
         return;
       }
 

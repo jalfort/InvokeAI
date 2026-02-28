@@ -244,6 +244,10 @@ export class CanvasManager extends CanvasModuleBase {
   ): CanvasEntityAdapterAnnotationLayer => {
     const adapter = new CanvasEntityAdapterAnnotationLayer(entityIdentifier, this);
     this.adapters.annotationLayers.set(adapter.id, adapter);
+    // If the annotation tool is active, new adapters need listening enabled immediately
+    if (this.tool.$tool.get() === 'annotate') {
+      adapter.setShapeListening(true);
+    }
     return adapter;
   };
 

@@ -17,7 +17,7 @@ const zGradientType = z.enum(['linear', 'radial']);
 const zSelectionMode = z.enum(['rectangle', 'ellipse', 'lasso', 'polygon']);
 export type SelectionMode = z.infer<typeof zSelectionMode>;
 
-const zAnnotationMode = z.enum(['line', 'arrow', 'text', 'rect', 'ellipse']);
+const zAnnotationMode = z.enum(['select', 'line', 'arrow', 'text', 'rect', 'ellipse']);
 export type AnnotationMode = z.infer<typeof zAnnotationMode>;
 
 const zSelectionFeatherDirection = z.enum(['both', 'inward', 'outward']);
@@ -174,10 +174,6 @@ const zCanvasSettingsState = z.object({
    */
   annotationMode: zAnnotationMode.default('arrow'),
   /**
-   * The annotation stroke color (RGBA).
-   */
-  annotationColor: zRgbaColor.default({ r: 255, g: 0, b: 0, a: 1 }),
-  /**
    * The annotation stroke width for line/arrow/rect/ellipse.
    */
   annotationStrokeWidth: z.number().min(1).max(50).default(3),
@@ -189,9 +185,21 @@ const zCanvasSettingsState = z.object({
    * The annotation text font family.
    */
   annotationFontFamily: z.string().default('sans-serif'),
+  /**
+   * The annotation text font style (normal, bold, italic, bold italic).
+   */
+  annotationFontStyle: z.enum(['normal', 'bold', 'italic', 'bold italic']).default('normal'),
+  /**
+   * Whether text annotations have a background rectangle.
+   */
+  annotationTextBgEnabled: z.boolean().default(true),
+  /**
+   * The annotation text background color (RGBA, alpha = opacity).
+   */
+  annotationTextBgColor: zRgbaColor.default({ r: 0, g: 0, b: 0, a: 0.8 }),
 });
 
-type CanvasSettingsState = z.infer<typeof zCanvasSettingsState>;
+export type CanvasSettingsState = z.infer<typeof zCanvasSettingsState>;
 const getInitialState = (): CanvasSettingsState => ({
   showHUD: true,
   clipToBbox: false,
@@ -229,10 +237,12 @@ const getInitialState = (): CanvasSettingsState => ({
   selectionOverlayOpacity: 0.5,
   selectionOverlayColor: { r: 220, g: 40, b: 40 },
   annotationMode: 'arrow',
-  annotationColor: { r: 255, g: 0, b: 0, a: 1 },
   annotationStrokeWidth: 3,
   annotationFontSize: 16,
   annotationFontFamily: 'sans-serif',
+  annotationFontStyle: 'normal' as const,
+  annotationTextBgEnabled: true,
+  annotationTextBgColor: { r: 0, g: 0, b: 0, a: 0.8 },
 });
 
 const slice = createSlice({
@@ -372,9 +382,6 @@ const slice = createSlice({
     settingsAnnotationModeChanged: (state, action: PayloadAction<CanvasSettingsState['annotationMode']>) => {
       state.annotationMode = action.payload;
     },
-    settingsAnnotationColorChanged: (state, action: PayloadAction<RgbaColor>) => {
-      state.annotationColor = action.payload;
-    },
     settingsAnnotationStrokeWidthChanged: (state, action: PayloadAction<CanvasSettingsState['annotationStrokeWidth']>) => {
       state.annotationStrokeWidth = action.payload;
     },
@@ -383,6 +390,15 @@ const slice = createSlice({
     },
     settingsAnnotationFontFamilyChanged: (state, action: PayloadAction<CanvasSettingsState['annotationFontFamily']>) => {
       state.annotationFontFamily = action.payload;
+    },
+    settingsAnnotationFontStyleChanged: (state, action: PayloadAction<CanvasSettingsState['annotationFontStyle']>) => {
+      state.annotationFontStyle = action.payload;
+    },
+    settingsAnnotationTextBgEnabledToggled: (state) => {
+      state.annotationTextBgEnabled = !state.annotationTextBgEnabled;
+    },
+    settingsAnnotationTextBgColorChanged: (state, action: PayloadAction<RgbaColor>) => {
+      state.annotationTextBgColor = action.payload;
     },
   },
 });
@@ -425,10 +441,12 @@ export const {
   settingsSelectionOverlayOpacityChanged,
   settingsSelectionOverlayColorChanged,
   settingsAnnotationModeChanged,
-  settingsAnnotationColorChanged,
   settingsAnnotationStrokeWidthChanged,
   settingsAnnotationFontSizeChanged,
   settingsAnnotationFontFamilyChanged,
+  settingsAnnotationFontStyleChanged,
+  settingsAnnotationTextBgEnabledToggled,
+  settingsAnnotationTextBgColorChanged,
 } = slice.actions;
 
 export const canvasSettingsSliceConfig: SliceConfig<typeof slice> = {
@@ -484,7 +502,9 @@ export const selectBrushOpacity = createCanvasSettingsSelector((settings) => set
 export const selectCloneBrushAlignedMode = createCanvasSettingsSelector((settings) => settings.cloneBrushAlignedMode);
 export const selectCloneBrushSampleMode = createCanvasSettingsSelector((settings) => settings.cloneBrushSampleMode);
 export const selectAnnotationMode = createCanvasSettingsSelector((settings) => settings.annotationMode);
-export const selectAnnotationColor = createCanvasSettingsSelector((settings) => settings.annotationColor);
 export const selectAnnotationStrokeWidth = createCanvasSettingsSelector((settings) => settings.annotationStrokeWidth);
 export const selectAnnotationFontSize = createCanvasSettingsSelector((settings) => settings.annotationFontSize);
 export const selectAnnotationFontFamily = createCanvasSettingsSelector((settings) => settings.annotationFontFamily);
+export const selectAnnotationFontStyle = createCanvasSettingsSelector((settings) => settings.annotationFontStyle);
+export const selectAnnotationTextBgEnabled = createCanvasSettingsSelector((settings) => settings.annotationTextBgEnabled);
+export const selectAnnotationTextBgColor = createCanvasSettingsSelector((settings) => settings.annotationTextBgColor);

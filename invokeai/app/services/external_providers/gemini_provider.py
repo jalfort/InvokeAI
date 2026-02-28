@@ -208,7 +208,17 @@ class GeminiProvider(BaseProvider):
                         break
             if text_response:
                 raise RuntimeError(f"Gemini returned text instead of an image: {text_response[:200]}")
-            raise RuntimeError("Gemini returned no image in the response.")
+            # Include candidates/feedback info for debugging empty responses
+            debug_info = ""
+            if response:
+                if hasattr(response, "candidates") and response.candidates:
+                    c = response.candidates[0]
+                    finish = getattr(c, "finish_reason", None)
+                    safety = getattr(c, "safety_ratings", None)
+                    debug_info = f" finish_reason={finish}, safety_ratings={safety}"
+                if hasattr(response, "prompt_feedback") and response.prompt_feedback:
+                    debug_info += f" prompt_feedback={response.prompt_feedback}"
+            raise RuntimeError(f"Gemini returned no image in the response.{debug_info}")
 
         if progress_cb:
             progress_cb("Done", 0.95)

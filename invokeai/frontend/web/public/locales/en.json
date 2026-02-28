@@ -2650,14 +2650,17 @@
             "annotate": "Annotate"
         },
         "annotate": {
+            "select": "Select",
             "line": "Line",
             "arrow": "Arrow",
             "text": "Text",
             "rect": "Rectangle",
             "ellipse": "Ellipse",
-            "color": "Color",
             "strokeWidth": "Stroke Width",
-            "fontSize": "Font Size"
+            "fontSize": "Font Size",
+            "bold": "Bold",
+            "italic": "Italic",
+            "background": "Background"
         },
         "cloneBrush": {
             "aligned": "Aligned Mode",

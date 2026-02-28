@@ -5,6 +5,7 @@ import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase'
 import type { CanvasToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasToolModule';
 import { getPrefixedId } from 'features/controlLayers/konva/util';
 import type { AnnotationMode } from 'features/controlLayers/store/canvasSettingsSlice';
+import { settingsAnnotationModeChanged } from 'features/controlLayers/store/canvasSettingsSlice';
 import {
   annotationLayerAdded,
   annotationObjectAdded,
@@ -80,9 +81,9 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
       group: new Konva.Group({ name: `${this.type}:group`, listening: false }),
     };
 
-    // Create shared transformer (no rotation, all anchor points)
+    // Create shared transformer (rotation + all anchor points)
     this.transformer = new Konva.Transformer({
-      rotateEnabled: false,
+      rotateEnabled: true,
       borderStroke: '#0ea5e9',
       borderStrokeWidth: 1,
       anchorFill: '#0ea5e9',
@@ -162,20 +163,28 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
   private hitTestAnnotations = (pointerPos: Coordinate): string | null => {
     // Use the Konva stage's getIntersection to find any shape at the pointer position
     const stage = this.manager.stage.konva.stage;
-    const shape = stage.getIntersection(pointerPos);
-    if (!shape || !shape.id()) {
+    const hit = stage.getIntersection(pointerPos);
+    if (!hit) {
       return null;
     }
 
-    // Check if this shape belongs to an annotation layer
-    const shapeId = shape.id();
-    for (const adapter of this.manager.adapters.annotationLayers.values()) {
-      if (!adapter.state.isEnabled) {
-        continue;
+    // Walk up the node tree to find an annotation object.
+    // For Konva.Label, getIntersection returns the child Text/Tag node (no ID),
+    // so we need to walk up to find the Label which carries the annotation object ID.
+    let node: Konva.Node | null = hit;
+    while (node && node !== stage) {
+      const nodeId = node.id();
+      if (nodeId) {
+        for (const adapter of this.manager.adapters.annotationLayers.values()) {
+          if (!adapter.state.isEnabled) {
+            continue;
+          }
+          if (adapter.getShapeById(nodeId)) {
+            return nodeId;
+          }
+        }
       }
-      if (adapter.getShapeById(shapeId)) {
-        return shapeId;
-      }
+      node = node.getParent();
     }
     return null;
   };
@@ -191,30 +200,32 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
 
     this.$selectedAnnotationId.set(objectId);
 
-    // Find the Konva shape across all annotation layers
+    // Find the Konva shape/label across all annotation layers
     for (const adapter of this.manager.adapters.annotationLayers.values()) {
-      const shape = adapter.getShapeById(objectId);
-      if (shape) {
-        // Apply selection glow
-        shape.shadowColor('#0ea5e9');
-        shape.shadowBlur(6);
-        shape.shadowEnabled(true);
-        shape.shadowOpacity(0.8);
+      const node = adapter.getShapeById(objectId);
+      if (node) {
+        // Apply selection glow (shadow is only available on Shape, not Label/Group)
+        if (node instanceof Konva.Shape) {
+          node.shadowColor('#0ea5e9');
+          node.shadowBlur(6);
+          node.shadowEnabled(true);
+          node.shadowOpacity(0.8);
+        }
 
         // Enable dragging
-        shape.draggable(true);
+        node.draggable(true);
 
         // Attach transformer
-        this.transformer.nodes([shape]);
+        this.transformer.nodes([node]);
         adapter.konva.objectGroup.add(this.transformer);
         this.transformer.moveToTop();
 
         // Listen for drag events
-        shape.on('dragend.annotationSelect', () => this.onShapeDragEnd(shape, adapter));
+        node.on('dragend.annotationSelect', () => this.onShapeDragEnd(node, adapter));
         // Listen for transform events
-        shape.on('transformend.annotationSelect', () => this.onShapeTransformEnd(shape, adapter));
+        node.on('transformend.annotationSelect', () => this.onShapeTransformEnd(node, adapter));
         // Listen for double-click (text re-edit)
-        shape.on('dblclick.annotationSelect', () => this.onShapeDoubleClick(objectId));
+        node.on('dblclick.annotationSelect', () => this.onShapeDoubleClick(objectId));
 
         break;
       }
@@ -230,15 +241,17 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
       return;
     }
 
-    // Find and un-glow the shape
+    // Find and un-glow the shape/label
     for (const adapter of this.manager.adapters.annotationLayers.values()) {
-      const shape = adapter.getShapeById(selectedId);
-      if (shape) {
-        shape.shadowEnabled(false);
-        shape.draggable(false);
-        shape.off('dragend.annotationSelect');
-        shape.off('transformend.annotationSelect');
-        shape.off('dblclick.annotationSelect');
+      const node = adapter.getShapeById(selectedId);
+      if (node) {
+        if (node instanceof Konva.Shape) {
+          node.shadowEnabled(false);
+        }
+        node.draggable(false);
+        node.off('dragend.annotationSelect');
+        node.off('transformend.annotationSelect');
+        node.off('dblclick.annotationSelect');
         break;
       }
     }
@@ -273,7 +286,7 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
 
   // ─── Drag & Transform handlers ────────────────────────────────
 
-  private onShapeDragEnd = (shape: Konva.Shape, adapter: CanvasEntityAdapterAnnotationLayer) => {
+  private onShapeDragEnd = (shape: Konva.Shape | Konva.Label, adapter: CanvasEntityAdapterAnnotationLayer) => {
     const objectId = shape.id();
     const found = this.findAnnotationObject(objectId);
     if (!found) {
@@ -314,7 +327,7 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
     }
   };
 
-  private onShapeTransformEnd = (shape: Konva.Shape, adapter: CanvasEntityAdapterAnnotationLayer) => {
+  private onShapeTransformEnd = (shape: Konva.Shape | Konva.Label, adapter: CanvasEntityAdapterAnnotationLayer) => {
     const objectId = shape.id();
     const found = this.findAnnotationObject(objectId);
     if (!found) {
@@ -324,26 +337,36 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
     const { obj } = found;
     const scaleX = shape.scaleX();
     const scaleY = shape.scaleY();
+    const rotation = shape.rotation();
 
     if (obj.type === 'annotation_line' || obj.type === 'annotation_arrow') {
-      // Scale all points, then reset scale
+      // Bake scale + rotation + position into absolute points, then reset all transforms.
+      // This avoids coordinate space mismatches (dx/dy are in parent space, points in local space).
       const dx = shape.x();
       const dy = shape.y();
+      const rot = rotation * (Math.PI / 180);
+      const cosR = Math.cos(rot);
+      const sinR = Math.sin(rot);
       const oldPoints = obj.points;
       const newPoints: number[] = [];
       for (let i = 0; i < oldPoints.length; i += 2) {
-        newPoints.push(oldPoints[i]! * scaleX + dx, oldPoints[i + 1]! * scaleY + dy);
+        // Scale in local space
+        const sx = oldPoints[i]! * scaleX;
+        const sy = oldPoints[i + 1]! * scaleY;
+        // Rotate to parent space, then translate
+        newPoints.push(sx * cosR - sy * sinR + dx, sx * sinR + sy * cosR + dy);
       }
       shape.scaleX(1);
       shape.scaleY(1);
       shape.x(0);
       shape.y(0);
+      shape.rotation(0);
 
       this.manager.stateApi.store.dispatch(
         annotationObjectUpdated({
           entityIdentifier: adapter.entityIdentifier,
           objectId,
-          changes: { points: newPoints } as Partial<AnnotationObject>,
+          changes: { points: newPoints, rotation: 0 } as Partial<AnnotationObject>,
         })
       );
     } else if (obj.type === 'annotation_rect') {
@@ -360,6 +383,7 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
             position: { x: shape.x(), y: shape.y() },
             width: newWidth,
             height: newHeight,
+            rotation,
           } as Partial<AnnotationObject>,
         })
       );
@@ -377,6 +401,7 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
             position: { x: shape.x(), y: shape.y() },
             radiusX: newRadiusX,
             radiusY: newRadiusY,
+            rotation,
           } as Partial<AnnotationObject>,
         })
       );
@@ -392,6 +417,7 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
           changes: {
             position: { x: shape.x(), y: shape.y() },
             fontSize: Math.max(8, newFontSize),
+            rotation,
           } as Partial<AnnotationObject>,
         })
       );
@@ -416,6 +442,15 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
   // ─── Keyboard handler ─────────────────────────────────────────
 
   onKeyDown = (e: KeyboardEvent) => {
+    // M key switches to select/manipulate mode (only active within annotation tool)
+    if ((e.key === 'm' || e.key === 'M') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (!this.$textSession.get()) {
+        this.manager.stateApi.store.dispatch(settingsAnnotationModeChanged('select'));
+        e.preventDefault();
+        return;
+      }
+    }
+
     if (e.key === 'Delete' || e.key === 'Backspace') {
       const selectedId = this.$selectedAnnotationId.get();
       // Only handle Delete if we have a selected annotation and no text session is active
@@ -443,6 +478,32 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
     const mode = this.getMode();
     const pos = cursorPos.relative;
 
+    // Select mode: hit-test annotations, select/deselect, no drawing
+    if (mode === 'select') {
+      const stage = this.manager.stage.konva.stage;
+      const pointerPosition = stage.getPointerPosition();
+      if (pointerPosition) {
+        // Check if clicking on the transformer's anchors first (let it handle resize)
+        const clickedOnTransformer = _e.target?.getParent()?.className === 'Transformer' ||
+          _e.target?.className === 'Transformer';
+        if (clickedOnTransformer) {
+          this.isDraggingSelection = true;
+          return;
+        }
+
+        const hitId = this.hitTestAnnotations(pointerPosition);
+        if (hitId) {
+          this.selectAnnotation(hitId);
+          this.isDraggingSelection = true;
+          return;
+        }
+      }
+      // No hit — deselect
+      this.deselectAnnotation();
+      this.isDraggingSelection = false;
+      return;
+    }
+
     if (mode === 'text') {
       // If there's an active text session, commit it first (click-away = commit)
       if (this.$textSession.get()) {
@@ -453,28 +514,7 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
       return;
     }
 
-    // Hit-test existing annotations before starting a new draw
-    const stage = this.manager.stage.konva.stage;
-    const pointerPosition = stage.getPointerPosition();
-    if (pointerPosition) {
-      // Check if clicking on the transformer's anchors first (let it handle resize)
-      const clickedOnTransformer = _e.target?.getParent()?.className === 'Transformer' ||
-        _e.target?.className === 'Transformer';
-      if (clickedOnTransformer) {
-        this.isDraggingSelection = true;
-        return;
-      }
-
-      const hitId = this.hitTestAnnotations(pointerPosition);
-      if (hitId) {
-        // Clicked on an existing annotation — select it
-        this.selectAnnotation(hitId);
-        this.isDraggingSelection = true;
-        return;
-      }
-    }
-
-    // No hit — deselect any current selection and start drawing
+    // Draw modes (line/arrow/rect/ellipse): deselect and start drawing
     this.deselectAnnotation();
     this.isDraggingSelection = false;
 
@@ -484,7 +524,7 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
     // Create a preview shape
     this.clearPreview();
     const settings = this.getSettings();
-    const colorHex = rgbaToHex(settings.annotationColor);
+    const colorHex = rgbaToHex(this.manager.stateApi.getCurrentColor());
 
     if (mode === 'line') {
       this.previewShape = new Konva.Line({
@@ -598,7 +638,7 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
     const pos = cursorPos.relative;
     const mode = this.getMode();
     const settings = this.getSettings();
-    const colorHex = rgbaToHex(settings.annotationColor);
+    const colorHex = rgbaToHex(this.manager.stateApi.getCurrentColor());
 
     // Only commit if there's actual size
     const dx = pos.x - startPoint.x;
@@ -698,7 +738,7 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
     const trimmed = session.text.trim();
     if (trimmed.length > 0) {
       const settings = this.getSettings();
-      const colorHex = rgbaToHex(settings.annotationColor);
+      const colorHex = rgbaToHex(this.manager.stateApi.getCurrentColor());
 
       if (session.editingObjectId) {
         // Re-editing an existing text object — update it
@@ -726,6 +766,10 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
               color: colorHex,
               fontSize: settings.annotationFontSize,
               fontFamily: settings.annotationFontFamily,
+              fontStyle: settings.annotationFontStyle,
+              backgroundColor: settings.annotationTextBgColor,
+              backgroundEnabled: settings.annotationTextBgEnabled,
+              padding: 8,
             },
           })
         );
@@ -771,7 +815,8 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
   };
 
   syncCursorStyle = () => {
-    this.manager.stage.setCursor('crosshair');
+    const mode = this.getMode();
+    this.manager.stage.setCursor(mode === 'select' ? 'default' : 'crosshair');
   };
 
   render = () => {

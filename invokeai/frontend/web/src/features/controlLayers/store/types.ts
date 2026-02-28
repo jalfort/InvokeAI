@@ -671,6 +671,7 @@ export const COLOR_BLEND_MODES: CompositeOperation[] = [
 const zAnnotationObjectBase = z.object({
   id: zId,
   color: z.string(), // hex color, e.g. '#ff0000'
+  rotation: z.number().optional(), // degrees, default 0 — applied by Konva.Transformer
 });
 
 const zAnnotationLineObject = zAnnotationObjectBase.extend({
@@ -693,6 +694,10 @@ const zAnnotationTextObject = zAnnotationObjectBase.extend({
   text: z.string(),
   fontSize: z.number(),
   fontFamily: z.string(),
+  fontStyle: z.enum(['normal', 'bold', 'italic', 'bold italic']).optional(),
+  backgroundColor: zRgbaColor.optional(),
+  backgroundEnabled: z.boolean().optional(),
+  padding: z.number().optional(),
 });
 export type AnnotationTextObject = z.infer<typeof zAnnotationTextObject>;
 

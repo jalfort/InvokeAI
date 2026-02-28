@@ -1,38 +1,20 @@
-import {
-  Box,
-  ButtonGroup,
-  CompositeNumberInput,
-  Flex,
-  IconButton,
-  Popover,
-  PopoverArrow,
-  PopoverBody,
-  PopoverContent,
-  PopoverTrigger,
-  Portal,
-  Text,
-  Tooltip,
-} from '@invoke-ai/ui-library';
+import { Box, ButtonGroup, CompositeNumberInput, Flex, IconButton, Text, Tooltip } from '@invoke-ai/ui-library';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
-import RgbaColorPicker from 'common/components/ColorPicker/RgbaColorPicker';
-import { rgbaColorToString } from 'common/util/colorCodeTransformers';
 import type { AnnotationMode } from 'features/controlLayers/store/canvasSettingsSlice';
 import {
-  selectAnnotationColor,
   selectAnnotationFontSize,
   selectAnnotationMode,
   selectAnnotationStrokeWidth,
-  settingsAnnotationColorChanged,
   settingsAnnotationFontSizeChanged,
   settingsAnnotationModeChanged,
   settingsAnnotationStrokeWidthChanged,
 } from 'features/controlLayers/store/canvasSettingsSlice';
-import type { RgbaColor } from 'features/controlLayers/store/types';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   PiArrowUpRightBold,
   PiCircleBold,
+  PiCursorBold,
   PiLineSegmentBold,
   PiRectangleBold,
   PiTextTBold,
@@ -45,20 +27,12 @@ export const ToolAnnotateSettings = memo(() => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const annotationMode = useAppSelector(selectAnnotationMode);
-  const annotationColor = useAppSelector(selectAnnotationColor);
   const strokeWidth = useAppSelector(selectAnnotationStrokeWidth);
   const fontSize = useAppSelector(selectAnnotationFontSize);
 
   const onSelectMode = useCallback(
     (mode: AnnotationMode) => () => {
       dispatch(settingsAnnotationModeChanged(mode));
-    },
-    [dispatch]
-  );
-
-  const onColorChange = useCallback(
-    (color: RgbaColor) => {
-      dispatch(settingsAnnotationColorChanged(color));
     },
     [dispatch]
   );
@@ -81,6 +55,15 @@ export const ToolAnnotateSettings = memo(() => {
     <Flex ms={2} alignItems="center" gap={3}>
       {/* Sub-tool Mode Picker */}
       <ButtonGroup isAttached size="sm">
+        <Tooltip label={t('controlLayers.annotate.select')}>
+          <IconButton
+            aria-label={t('controlLayers.annotate.select')}
+            icon={<PiCursorBold />}
+            colorScheme={annotationMode === 'select' ? 'invokeBlue' : 'base'}
+            variant="solid"
+            onClick={onSelectMode('select')}
+          />
+        </Tooltip>
         <Tooltip label={t('controlLayers.annotate.line')}>
           <IconButton
             aria-label={t('controlLayers.annotate.line')}
@@ -128,34 +111,8 @@ export const ToolAnnotateSettings = memo(() => {
         </Tooltip>
       </ButtonGroup>
 
-      {/* Color Picker */}
-      <Popover isLazy closeOnBlur={true} closeOnEsc={true} returnFocusOnClose={true}>
-        <PopoverTrigger>
-          <Flex role="button" aria-label={t('controlLayers.annotate.color')} tabIndex={-1} cursor="pointer">
-            <Tooltip label={t('controlLayers.annotate.color')}>
-              <Box
-                w={6}
-                h={6}
-                borderRadius="full"
-                borderWidth={2}
-                borderColor="base.600"
-                bg={rgbaColorToString(annotationColor)}
-              />
-            </Tooltip>
-          </Flex>
-        </PopoverTrigger>
-        <Portal>
-          <PopoverContent minW={96}>
-            <PopoverArrow />
-            <PopoverBody minH={64}>
-              <RgbaColorPicker color={annotationColor} onChange={onColorChange} withNumberInput withSwatches />
-            </PopoverBody>
-          </PopoverContent>
-        </Portal>
-      </Popover>
-
       {/* Stroke Width (line/arrow/rect/ellipse) */}
-      {annotationMode !== 'text' && (
+      {annotationMode !== 'text' && annotationMode !== 'select' && (
         <Flex alignItems="center" gap={1}>
           <Text fontSize="xs" color="base.400" whiteSpace="nowrap">
             {t('controlLayers.annotate.strokeWidth')}
