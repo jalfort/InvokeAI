@@ -3,6 +3,7 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from 'app/store/store';
 import { selectParamsSlice } from 'features/controlLayers/store/paramsSlice';
 import type {
+  CanvasAnnotationLayerState,
   CanvasControlLayerState,
   CanvasEntityIdentifier,
   CanvasEntityState,
@@ -39,7 +40,8 @@ const selectEntityCountAll = createCanvasSelector((canvas) => {
     canvas.regionalGuidance.entities.length +
     canvas.rasterLayers.entities.length +
     canvas.controlLayers.entities.length +
-    canvas.inpaintMasks.entities.length
+    canvas.inpaintMasks.entities.length +
+    canvas.annotationLayers.entities.length
   );
 });
 
@@ -63,6 +65,11 @@ export const selectActiveInpaintMaskEntities = createSelector(selectInpaintMaskE
 export const selectRegionalGuidanceEntities = createCanvasSelector((canvas) => canvas.regionalGuidance.entities);
 export const selectActiveRegionalGuidanceEntities = createSelector(selectRegionalGuidanceEntities, (entities) =>
   entities.filter(isVisibleEntity)
+);
+
+export const selectAnnotationLayerEntities = createCanvasSelector((canvas) => canvas.annotationLayers.entities);
+export const selectActiveAnnotationLayerEntities = createSelector(selectAnnotationLayerEntities, (entities) =>
+  entities.filter((e) => e.isEnabled && e.objects.length > 0)
 );
 
 /**
@@ -111,6 +118,9 @@ export function selectEntity<T extends CanvasEntityIdentifier>(
     case 'regional_guidance':
       entity = state.regionalGuidance.entities.find((entity) => entity.id === id);
       break;
+    case 'annotation_layer':
+      entity = state.annotationLayers.entities.find((entity) => entity.id === id);
+      break;
   }
 
   // This cast is safe, but TS seems to be unable to infer the type
@@ -143,6 +153,10 @@ export function selectEntityIdentifierBelowThisOne<T extends CanvasEntityIdentif
     }
     case 'regional_guidance': {
       entities = state.regionalGuidance.entities;
+      break;
+    }
+    case 'annotation_layer': {
+      entities = state.annotationLayers.entities;
       break;
     }
   }
@@ -199,6 +213,9 @@ export function selectAllEntitiesOfType<T extends CanvasEntityState['type']>(
     case 'regional_guidance':
       entities = state.regionalGuidance.entities;
       break;
+    case 'annotation_layer':
+      entities = state.annotationLayers.entities;
+      break;
   }
 
   // This cast is safe, but TS seems to be unable to infer the type
@@ -211,6 +228,7 @@ export function selectAllEntitiesOfType<T extends CanvasEntityState['type']>(
 export function selectAllEntities(state: CanvasState): CanvasEntityState[] {
   // These are in the same order as they are displayed in the list!
   return [
+    ...state.annotationLayers.entities.toReversed(),
     ...state.inpaintMasks.entities.toReversed(),
     ...state.regionalGuidance.entities.toReversed(),
     ...state.controlLayers.entities.toReversed(),
@@ -227,12 +245,13 @@ export function selectAllEntities(state: CanvasState): CanvasEntityState[] {
  */
 export function selectAllRenderableEntities(
   state: CanvasState
-): (CanvasRasterLayerState | CanvasControlLayerState | CanvasInpaintMaskState | CanvasRegionalGuidanceState)[] {
+): (CanvasRasterLayerState | CanvasControlLayerState | CanvasInpaintMaskState | CanvasRegionalGuidanceState | CanvasAnnotationLayerState)[] {
   return [
     ...state.rasterLayers.entities,
     ...state.controlLayers.entities,
     ...state.inpaintMasks.entities,
     ...state.regionalGuidance.entities,
+    ...state.annotationLayers.entities,
   ];
 }
 
@@ -287,6 +306,7 @@ const selectRasterLayersIsHidden = createCanvasSelector((canvas) => canvas.raste
 const selectControlLayersIsHidden = createCanvasSelector((canvas) => canvas.controlLayers.isHidden);
 const selectInpaintMasksIsHidden = createCanvasSelector((canvas) => canvas.inpaintMasks.isHidden);
 const selectRegionalGuidanceIsHidden = createCanvasSelector((canvas) => canvas.regionalGuidance.isHidden);
+const selectAnnotationLayersIsHidden = createCanvasSelector((canvas) => canvas.annotationLayers.isHidden);
 
 /**
  * Returns the hidden selector for the given entity type.
@@ -301,6 +321,8 @@ export const getSelectIsTypeHidden = (type: CanvasEntityType) => {
       return selectInpaintMasksIsHidden;
     case 'regional_guidance':
       return selectRegionalGuidanceIsHidden;
+    case 'annotation_layer':
+      return selectAnnotationLayersIsHidden;
     default:
       assert<Equals<typeof type, never>>(false, 'Unhandled entity type');
   }

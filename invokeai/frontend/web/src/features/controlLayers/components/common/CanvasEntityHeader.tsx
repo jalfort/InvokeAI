@@ -3,7 +3,6 @@ import { ContextMenu, Flex, MenuList } from '@invoke-ai/ui-library';
 import { ControlLayerMenuItems } from 'features/controlLayers/components/ControlLayer/ControlLayerMenuItems';
 import { InpaintMaskMenuItems } from 'features/controlLayers/components/InpaintMask/InpaintMaskMenuItems';
 import { RasterLayerMenuItems } from 'features/controlLayers/components/RasterLayer/RasterLayerMenuItems';
-import { IPAdapterMenuItems } from 'features/controlLayers/components/RefImage/IPAdapterMenuItems';
 import { RegionalGuidanceMenuItems } from 'features/controlLayers/components/RegionalGuidance/RegionalGuidanceMenuItems';
 import { useEntityIdentifierContext } from 'features/controlLayers/contexts/EntityIdentifierContext';
 import { memo, useCallback } from 'react';
@@ -44,12 +43,8 @@ export const CanvasEntityHeader = memo(({ children, ...rest }: FlexProps) => {
       );
     }
 
-    if (entityIdentifier.type === 'reference_image') {
-      return (
-        <MenuList>
-          <IPAdapterMenuItems />
-        </MenuList>
-      );
+    if (entityIdentifier.type === 'annotation_layer') {
+      return null;
     }
 
     assert(false, 'Unhandled entity type');

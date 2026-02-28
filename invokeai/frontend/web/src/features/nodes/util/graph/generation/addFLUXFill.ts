@@ -39,7 +39,7 @@ export const addFLUXFill = async ({
   const canvasSettings = selectCanvasSettingsSlice(state);
 
   const rasterAdapters = manager.compositor.getVisibleAdaptersOfType('raster_layer');
-  const initialImage = await manager.compositor.getCompositeImageDTO(rasterAdapters, rect, {
+  const initialImage = await manager.compositor.getCompositeImageDTOWithAnnotations(rasterAdapters, rect, {
     is_intermediate: true,
     silent: true,
   });

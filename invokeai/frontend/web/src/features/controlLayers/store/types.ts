@@ -112,6 +112,7 @@ const _zTool = z.enum([
   'rect',
   'gradient',
   'selection',
+  'annotate',
   'view',
   'bbox',
   'colorPicker',
@@ -666,6 +667,68 @@ export const COLOR_BLEND_MODES: CompositeOperation[] = [
   'luminosity',
 ];
 
+// --- Annotation object schemas ---
+const zAnnotationObjectBase = z.object({
+  id: zId,
+  color: z.string(), // hex color, e.g. '#ff0000'
+});
+
+const zAnnotationLineObject = zAnnotationObjectBase.extend({
+  type: z.literal('annotation_line'),
+  points: z.array(z.number()), // [x1, y1, x2, y2]
+  strokeWidth: z.number(),
+});
+export type AnnotationLineObject = z.infer<typeof zAnnotationLineObject>;
+
+const zAnnotationArrowObject = zAnnotationObjectBase.extend({
+  type: z.literal('annotation_arrow'),
+  points: z.array(z.number()), // [x1, y1, x2, y2]
+  strokeWidth: z.number(),
+});
+export type AnnotationArrowObject = z.infer<typeof zAnnotationArrowObject>;
+
+const zAnnotationTextObject = zAnnotationObjectBase.extend({
+  type: z.literal('annotation_text'),
+  position: zCoordinate,
+  text: z.string(),
+  fontSize: z.number(),
+  fontFamily: z.string(),
+});
+export type AnnotationTextObject = z.infer<typeof zAnnotationTextObject>;
+
+const zAnnotationRectObject = zAnnotationObjectBase.extend({
+  type: z.literal('annotation_rect'),
+  position: zCoordinate,
+  width: z.number(),
+  height: z.number(),
+  strokeWidth: z.number(),
+});
+export type AnnotationRectObject = z.infer<typeof zAnnotationRectObject>;
+
+const zAnnotationEllipseObject = zAnnotationObjectBase.extend({
+  type: z.literal('annotation_ellipse'),
+  position: zCoordinate,
+  radiusX: z.number(),
+  radiusY: z.number(),
+  strokeWidth: z.number(),
+});
+export type AnnotationEllipseObject = z.infer<typeof zAnnotationEllipseObject>;
+
+const zAnnotationObject = z.discriminatedUnion('type', [
+  zAnnotationLineObject,
+  zAnnotationArrowObject,
+  zAnnotationTextObject,
+  zAnnotationRectObject,
+  zAnnotationEllipseObject,
+]);
+export type AnnotationObject = z.infer<typeof zAnnotationObject>;
+
+const zCanvasAnnotationLayerState = zCanvasEntityBase.extend({
+  type: z.literal('annotation_layer'),
+  objects: z.array(zAnnotationObject),
+});
+export type CanvasAnnotationLayerState = z.infer<typeof zCanvasAnnotationLayerState>;
+
 const zCanvasRasterLayerState = zCanvasEntityBase.extend({
   type: z.literal('raster_layer'),
   position: zCoordinate,
@@ -700,6 +763,7 @@ const _zCanvasEntityState = z.discriminatedUnion('type', [
   zCanvasControlLayerState,
   zCanvasRegionalGuidanceState,
   zCanvasInpaintMaskState,
+  zCanvasAnnotationLayerState,
 ]);
 export type CanvasEntityState = z.infer<typeof _zCanvasEntityState>;
 
@@ -708,6 +772,7 @@ const zCanvasEntityType = z.union([
   zCanvasControlLayerState.shape.type,
   zCanvasRegionalGuidanceState.shape.type,
   zCanvasInpaintMaskState.shape.type,
+  zCanvasAnnotationLayerState.shape.type,
 ]);
 export type CanvasEntityType = z.infer<typeof zCanvasEntityType>;
 
@@ -932,6 +997,10 @@ const zRegionalGuidance = z.object({
   isHidden: z.boolean(),
   entities: z.array(zCanvasRegionalGuidanceState),
 });
+const zAnnotationLayers = z.object({
+  isHidden: z.boolean(),
+  entities: z.array(zCanvasAnnotationLayerState),
+});
 export const zCanvasState = z.object({
   _version: z.literal(3),
   selectedEntityIdentifier: zCanvasEntityIdentifer.nullable(),
@@ -940,6 +1009,7 @@ export const zCanvasState = z.object({
   rasterLayers: zRasterLayers,
   controlLayers: zControlLayers,
   regionalGuidance: zRegionalGuidance,
+  annotationLayers: zAnnotationLayers,
   bbox: zBboxState,
 });
 export type CanvasState = z.infer<typeof zCanvasState>;
@@ -951,6 +1021,7 @@ export const getInitialCanvasState = (): CanvasState => ({
   rasterLayers: { isHidden: false, entities: [] },
   controlLayers: { isHidden: false, entities: [] },
   regionalGuidance: { isHidden: false, entities: [] },
+  annotationLayers: { isHidden: false, entities: [] },
   bbox: {
     rect: { x: 0, y: 0, width: 512, height: 512 },
     aspectRatio: deepClone(DEFAULT_ASPECT_RATIO_CONFIG),
@@ -1066,6 +1137,12 @@ export function isRegionalGuidanceEntityIdentifier(
   entityIdentifier: CanvasEntityIdentifier
 ): entityIdentifier is CanvasEntityIdentifier<'regional_guidance'> {
   return entityIdentifier.type === 'regional_guidance';
+}
+
+export function isAnnotationLayerEntityIdentifier(
+  entityIdentifier: CanvasEntityIdentifier
+): entityIdentifier is CanvasEntityIdentifier<'annotation_layer'> {
+  return entityIdentifier.type === 'annotation_layer';
 }
 
 export function isFilterableEntityIdentifier(

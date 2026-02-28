@@ -1,5 +1,6 @@
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
+import { CanvasAnnotationToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasAnnotationToolModule';
 import { CanvasBboxToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasBboxToolModule';
 import { CanvasBrushToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasBrushToolModule';
 import { CanvasColorPickerToolModule } from 'features/controlLayers/konva/CanvasTool/CanvasColorPickerToolModule';
@@ -70,6 +71,7 @@ export class CanvasToolModule extends CanvasModuleBase {
     rect: CanvasRectToolModule;
     gradient: CanvasGradientToolModule;
     selection: CanvasSelectionToolModule;
+    annotate: CanvasAnnotationToolModule;
     colorPicker: CanvasColorPickerToolModule;
     bbox: CanvasBboxToolModule;
     view: CanvasViewToolModule;
@@ -131,6 +133,7 @@ export class CanvasToolModule extends CanvasModuleBase {
       rect: new CanvasRectToolModule(this),
       gradient: new CanvasGradientToolModule(this),
       selection: new CanvasSelectionToolModule(this),
+      annotate: new CanvasAnnotationToolModule(this),
       colorPicker: new CanvasColorPickerToolModule(this),
       bbox: new CanvasBboxToolModule(this),
       text: new CanvasTextToolModule(this),
@@ -150,6 +153,7 @@ export class CanvasToolModule extends CanvasModuleBase {
     this.konva.group.add(this.tools.text.konva.group);
     this.konva.group.add(this.tools.bbox.konva.group);
     this.konva.group.add(this.tools.selection.konva.group);
+    this.konva.group.add(this.tools.annotate.konva.group);
 
     this.subscriptions.add(this.manager.stage.$stageAttrs.listen(this.render));
     this.subscriptions.add(this.manager.$isBusy.listen(this.render));
@@ -229,6 +233,9 @@ export class CanvasToolModule extends CanvasModuleBase {
     } else if (tool === 'selection') {
       // Selection tool always shows crosshair regardless of entity state
       this.tools.selection.syncCursorStyle();
+    } else if (tool === 'annotate') {
+      // Annotation tool always shows crosshair regardless of entity state
+      this.tools.annotate.syncCursorStyle();
     } else if (this.manager.stateApi.getRenderedEntityCount() === 0) {
       stage.setCursor('not-allowed');
     } else {
@@ -427,6 +434,14 @@ export class CanvasToolModule extends CanvasModuleBase {
         return;
       }
 
+      // Annotation tool works as an overlay and doesn't require getCanDraw()
+      if (tool === 'annotate') {
+        this.$isPrimaryPointerDown.set(getIsPrimaryMouseDown(e));
+        this.syncCursorPositions();
+        await this.tools.annotate.onStagePointerDown(e);
+        return;
+      }
+
       if (!this.getCanDraw()) {
         return;
       }
@@ -473,6 +488,12 @@ export class CanvasToolModule extends CanvasModuleBase {
         return;
       }
 
+      // Annotation tool works as an overlay and doesn't require getCanDraw()
+      if (tool === 'annotate') {
+        this.tools.annotate.onStagePointerUp(e);
+        return;
+      }
+
       if (!this.getCanDraw()) {
         return;
       }
@@ -513,6 +534,12 @@ export class CanvasToolModule extends CanvasModuleBase {
       // Selection tool works as an ephemeral overlay and doesn't require getCanDraw()
       if (tool === 'selection') {
         await this.tools.selection.onStagePointerMove(e);
+        return;
+      }
+
+      // Annotation tool works as an overlay and doesn't require getCanDraw()
+      if (tool === 'annotate') {
+        await this.tools.annotate.onStagePointerMove(e);
         return;
       }
 
@@ -845,6 +872,7 @@ export class CanvasToolModule extends CanvasModuleBase {
         rect: this.tools.rect.repr(),
         gradient: this.tools.gradient.repr(),
         selection: this.tools.selection.repr(),
+        annotate: this.tools.annotate.repr(),
         bbox: this.tools.bbox.repr(),
         view: this.tools.view.repr(),
         move: this.tools.move.repr(),

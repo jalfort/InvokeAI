@@ -1,5 +1,6 @@
 import { Flex } from '@invoke-ai/ui-library';
 import ScrollableContent from 'common/components/OverlayScrollbars/ScrollableContent';
+import { AnnotationLayerEntityList } from 'features/controlLayers/components/AnnotationLayer/AnnotationLayerEntityList';
 import { ControlLayerEntityList } from 'features/controlLayers/components/ControlLayer/ControlLayerEntityList';
 import { InpaintMaskList } from 'features/controlLayers/components/InpaintMask/InpaintMaskList';
 import { RasterLayerEntityList } from 'features/controlLayers/components/RasterLayer/RasterLayerEntityList';
@@ -10,6 +11,7 @@ export const CanvasEntityList = memo(() => {
   return (
     <ScrollableContent>
       <Flex flexDir="column" gap={2} data-testid="control-layers-layer-list" w="full" h="full">
+        <AnnotationLayerEntityList />
         <InpaintMaskList />
         <RegionalGuidanceEntityList />
         <ControlLayerEntityList />

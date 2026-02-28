@@ -17,6 +17,9 @@ const zGradientType = z.enum(['linear', 'radial']);
 const zSelectionMode = z.enum(['rectangle', 'ellipse', 'lasso', 'polygon']);
 export type SelectionMode = z.infer<typeof zSelectionMode>;
 
+const zAnnotationMode = z.enum(['line', 'arrow', 'text', 'rect', 'ellipse']);
+export type AnnotationMode = z.infer<typeof zAnnotationMode>;
+
 const zSelectionFeatherDirection = z.enum(['both', 'inward', 'outward']);
 export type SelectionFeatherDirection = z.infer<typeof zSelectionFeatherDirection>;
 
@@ -166,6 +169,26 @@ const zCanvasSettingsState = z.object({
       b: z.number().int().min(0).max(255),
     })
     .default({ r: 220, g: 40, b: 40 }),
+  /**
+   * The annotation tool sub-tool mode.
+   */
+  annotationMode: zAnnotationMode.default('arrow'),
+  /**
+   * The annotation stroke color (hex).
+   */
+  annotationColor: z.string().default('#ff0000'),
+  /**
+   * The annotation stroke width for line/arrow/rect/ellipse.
+   */
+  annotationStrokeWidth: z.number().min(1).max(50).default(3),
+  /**
+   * The annotation text font size.
+   */
+  annotationFontSize: z.number().min(8).max(200).default(16),
+  /**
+   * The annotation text font family.
+   */
+  annotationFontFamily: z.string().default('sans-serif'),
 });
 
 type CanvasSettingsState = z.infer<typeof zCanvasSettingsState>;
@@ -205,6 +228,11 @@ const getInitialState = (): CanvasSettingsState => ({
   selectionFeatherDirection: 'both',
   selectionOverlayOpacity: 0.5,
   selectionOverlayColor: { r: 220, g: 40, b: 40 },
+  annotationMode: 'arrow',
+  annotationColor: '#ff0000',
+  annotationStrokeWidth: 3,
+  annotationFontSize: 16,
+  annotationFontFamily: 'sans-serif',
 });
 
 const slice = createSlice({
@@ -341,6 +369,21 @@ const slice = createSlice({
     settingsSelectionOverlayColorChanged: (state, action: PayloadAction<RgbColor>) => {
       state.selectionOverlayColor = action.payload;
     },
+    settingsAnnotationModeChanged: (state, action: PayloadAction<CanvasSettingsState['annotationMode']>) => {
+      state.annotationMode = action.payload;
+    },
+    settingsAnnotationColorChanged: (state, action: PayloadAction<CanvasSettingsState['annotationColor']>) => {
+      state.annotationColor = action.payload;
+    },
+    settingsAnnotationStrokeWidthChanged: (state, action: PayloadAction<CanvasSettingsState['annotationStrokeWidth']>) => {
+      state.annotationStrokeWidth = action.payload;
+    },
+    settingsAnnotationFontSizeChanged: (state, action: PayloadAction<CanvasSettingsState['annotationFontSize']>) => {
+      state.annotationFontSize = action.payload;
+    },
+    settingsAnnotationFontFamilyChanged: (state, action: PayloadAction<CanvasSettingsState['annotationFontFamily']>) => {
+      state.annotationFontFamily = action.payload;
+    },
   },
 });
 
@@ -381,6 +424,11 @@ export const {
   settingsSelectionFeatherDirectionChanged,
   settingsSelectionOverlayOpacityChanged,
   settingsSelectionOverlayColorChanged,
+  settingsAnnotationModeChanged,
+  settingsAnnotationColorChanged,
+  settingsAnnotationStrokeWidthChanged,
+  settingsAnnotationFontSizeChanged,
+  settingsAnnotationFontFamilyChanged,
 } = slice.actions;
 
 export const canvasSettingsSliceConfig: SliceConfig<typeof slice> = {
@@ -435,3 +483,8 @@ export const selectBrushHardness = createCanvasSettingsSelector((settings) => se
 export const selectBrushOpacity = createCanvasSettingsSelector((settings) => settings.brushOpacity);
 export const selectCloneBrushAlignedMode = createCanvasSettingsSelector((settings) => settings.cloneBrushAlignedMode);
 export const selectCloneBrushSampleMode = createCanvasSettingsSelector((settings) => settings.cloneBrushSampleMode);
+export const selectAnnotationMode = createCanvasSettingsSelector((settings) => settings.annotationMode);
+export const selectAnnotationColor = createCanvasSettingsSelector((settings) => settings.annotationColor);
+export const selectAnnotationStrokeWidth = createCanvasSettingsSelector((settings) => settings.annotationStrokeWidth);
+export const selectAnnotationFontSize = createCanvasSettingsSelector((settings) => settings.annotationFontSize);
+export const selectAnnotationFontFamily = createCanvasSettingsSelector((settings) => settings.annotationFontFamily);

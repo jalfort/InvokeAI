@@ -67,7 +67,7 @@ const selectOpacity = createSelector(selectCanvasSlice, (canvas) => {
     return 1; // fallback to 100% opacity
   }
   const selectedEntity = selectEntity(canvas, selectedEntityIdentifier);
-  if (!selectedEntity) {
+  if (!selectedEntity || selectedEntity.type === 'annotation_layer') {
     return 1; // fallback to 100% opacity
   }
   // Opacity is a float from 0-1, but we want to display it as a percentage

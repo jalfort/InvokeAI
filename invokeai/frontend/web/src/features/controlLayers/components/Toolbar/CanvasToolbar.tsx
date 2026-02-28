@@ -2,6 +2,7 @@ import { Box, Divider, Flex } from '@invoke-ai/ui-library';
 import { CanvasSettingsPopover } from 'features/controlLayers/components/Settings/CanvasSettingsPopover';
 import { TextToolOptions } from 'features/controlLayers/components/Text/TextToolOptions';
 import { useToolIsSelected } from 'features/controlLayers/components/Tool/hooks';
+import { ToolAnnotateSettings } from 'features/controlLayers/components/Tool/ToolAnnotateSettings';
 import { ToolBrushSettings } from 'features/controlLayers/components/Tool/ToolBrushSettings';
 import { ToolCloneBrushSettings } from 'features/controlLayers/components/Tool/ToolCloneBrushSettings';
 import { ToolFillColorPicker } from 'features/controlLayers/components/Tool/ToolFillColorPicker';
@@ -37,6 +38,7 @@ export const CanvasToolbar = memo(() => {
   const isTextSelected = useToolIsSelected('text');
   const isGradientSelected = useToolIsSelected('gradient');
   const isSelectionSelected = useToolIsSelected('selection');
+  const isAnnotateSelected = useToolIsSelected('annotate');
 
   useCanvasResetLayerHotkey();
   useCanvasDeleteLayerHotkey();
@@ -64,6 +66,7 @@ export const CanvasToolbar = memo(() => {
         {isCloneBrushSelected && <ToolCloneBrushSettings />}
         {isEraserSelected && <ToolWidthPicker />}
         {isSelectionSelected && <ToolSelectionSettings />}
+        {isAnnotateSelected && <ToolAnnotateSettings />}
       </ToolOptionsRowContainer>
       <Flex alignItems="center" h="full">
         <CanvasToolbarScale />

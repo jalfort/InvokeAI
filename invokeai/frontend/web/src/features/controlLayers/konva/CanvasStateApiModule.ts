@@ -456,6 +456,13 @@ export class CanvasStateApiModule extends CanvasModuleBase {
   };
 
   /**
+   * Gets the annotation layers state from redux.
+   */
+  getAnnotationLayersState = () => {
+    return this.getCanvasState().annotationLayers;
+  };
+
+  /**
    * Gets the canvas staging area state from redux.
    */
   getStagingArea = () => {

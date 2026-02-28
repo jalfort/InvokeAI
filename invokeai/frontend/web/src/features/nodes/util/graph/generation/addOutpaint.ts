@@ -72,7 +72,7 @@ export const addOutpaint = async ({
   }
 
   const rasterAdapters = manager.compositor.getVisibleAdaptersOfType('raster_layer');
-  const initialImage = await manager.compositor.getCompositeImageDTO(rasterAdapters, rect, {
+  const initialImage = await manager.compositor.getCompositeImageDTOWithAnnotations(rasterAdapters, rect, {
     is_intermediate: true,
     silent: true,
   });

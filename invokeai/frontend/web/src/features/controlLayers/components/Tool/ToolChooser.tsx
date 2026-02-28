@@ -1,4 +1,5 @@
 import { ButtonGroup } from '@invoke-ai/ui-library';
+import { ToolAnnotateButton } from 'features/controlLayers/components/Tool/ToolAnnotateButton';
 import { ToolBboxButton } from 'features/controlLayers/components/Tool/ToolBboxButton';
 import { ToolBrushButton } from 'features/controlLayers/components/Tool/ToolBrushButton';
 import { ToolCloneBrushButton } from 'features/controlLayers/components/Tool/ToolCloneBrushButton';
@@ -24,6 +25,7 @@ export const ToolChooser: React.FC = () => {
         <ToolGradientButton />
         <ToolSelectionButton />
         <ToolTextButton />
+        <ToolAnnotateButton />
         <ToolMoveButton />
         <ToolViewButton />
         <ToolBboxButton />

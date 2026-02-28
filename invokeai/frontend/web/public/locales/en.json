@@ -2449,6 +2449,7 @@
         "addControlLayer": "Add $t(controlLayers.controlLayer)",
         "addInpaintMask": "Add $t(controlLayers.inpaintMask)",
         "addRegionalGuidance": "Add $t(controlLayers.regionalGuidance)",
+        "addAnnotationLayer": "Add $t(controlLayers.annotationLayer)",
         "addGlobalReferenceImage": "Add $t(controlLayers.globalReferenceImage)",
         "addDenoiseLimit": "Add $t(controlLayers.denoiseLimit)",
         "rasterLayer": "Raster Layer",
@@ -2456,6 +2457,7 @@
         "inpaintMask": "Inpaint Mask",
         "invertMask": "Invert Mask",
         "regionalGuidance": "Regional Guidance",
+        "annotationLayer": "Annotation Layer",
         "referenceImageRegional": "Reference Image (Regional)",
         "referenceImageGlobal": "Reference Image (Global)",
         "asRasterLayer": "As $t(controlLayers.rasterLayer)",
@@ -2644,7 +2646,18 @@
             "colorPicker": "Color Picker",
             "text": "Text",
             "selection": "Selection",
-            "cloneBrush": "Clone Brush"
+            "cloneBrush": "Clone Brush",
+            "annotate": "Annotate"
+        },
+        "annotate": {
+            "line": "Line",
+            "arrow": "Arrow",
+            "text": "Text",
+            "rect": "Rectangle",
+            "ellipse": "Ellipse",
+            "color": "Color",
+            "strokeWidth": "Stroke Width",
+            "fontSize": "Font Size"
         },
         "cloneBrush": {
             "aligned": "Aligned Mode",

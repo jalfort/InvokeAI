@@ -2,6 +2,7 @@ import { deepClone } from 'common/util/deepClone';
 import { merge } from 'es-toolkit/compat';
 import { getPrefixedId } from 'features/controlLayers/konva/util';
 import type {
+  CanvasAnnotationLayerState,
   CanvasControlLayerState,
   CanvasImageState,
   CanvasInpaintMaskState,
@@ -262,6 +263,22 @@ export const getInpaintMaskState = (
     },
     noiseLevel: undefined,
     denoiseLimit: undefined,
+  };
+  merge(entityState, overrides);
+  return entityState;
+};
+
+export const getAnnotationLayerState = (
+  id: string,
+  overrides?: PartialDeep<CanvasAnnotationLayerState>
+): CanvasAnnotationLayerState => {
+  const entityState: CanvasAnnotationLayerState = {
+    id,
+    name: null,
+    type: 'annotation_layer',
+    isEnabled: true,
+    isLocked: false,
+    objects: [],
   };
   merge(entityState, overrides);
   return entityState;

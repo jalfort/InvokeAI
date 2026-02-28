@@ -3,6 +3,7 @@ import type { AppStore } from 'app/store/store';
 import { SyncableMap } from 'common/util/SyncableMap/SyncableMap';
 import { CanvasCacheModule } from 'features/controlLayers/konva/CanvasCacheModule';
 import { CanvasCompositorModule } from 'features/controlLayers/konva/CanvasCompositorModule';
+import { CanvasEntityAdapterAnnotationLayer } from 'features/controlLayers/konva/CanvasEntity/CanvasEntityAdapterAnnotationLayer';
 import { CanvasEntityAdapterControlLayer } from 'features/controlLayers/konva/CanvasEntity/CanvasEntityAdapterControlLayer';
 import { CanvasEntityAdapterInpaintMask } from 'features/controlLayers/konva/CanvasEntity/CanvasEntityAdapterInpaintMask';
 import { CanvasEntityAdapterRasterLayer } from 'features/controlLayers/konva/CanvasEntity/CanvasEntityAdapterRasterLayer';
@@ -51,6 +52,7 @@ export class CanvasManager extends CanvasModuleBase {
     controlLayers: new SyncableMap<string, CanvasEntityAdapterControlLayer>(),
     regionMasks: new SyncableMap<string, CanvasEntityAdapterRegionalGuidance>(),
     inpaintMasks: new SyncableMap<string, CanvasEntityAdapterInpaintMask>(),
+    annotationLayers: new SyncableMap<string, CanvasEntityAdapterAnnotationLayer>(),
   };
 
   stateApi: CanvasStateApiModule;
@@ -153,6 +155,9 @@ export class CanvasManager extends CanvasModuleBase {
       case 'inpaint_mask':
         adapter = this.adapters.inpaintMasks.get(entityIdentifier.id);
         break;
+      case 'annotation_layer':
+        // Annotation layers use a standalone adapter (not CanvasEntityAdapter), accessed via adapters.annotationLayers
+        return null;
       default:
         return null;
     }
@@ -173,6 +178,8 @@ export class CanvasManager extends CanvasModuleBase {
         return this.adapters.regionMasks.delete(entityIdentifier.id);
       case 'inpaint_mask':
         return this.adapters.inpaintMasks.delete(entityIdentifier.id);
+      case 'annotation_layer':
+        return this.adapters.annotationLayers.delete(entityIdentifier.id);
       default:
         return false;
     }
@@ -232,6 +239,14 @@ export class CanvasManager extends CanvasModuleBase {
     }
   };
 
+  createAnnotationLayerAdapter = (
+    entityIdentifier: CanvasEntityIdentifier<'annotation_layer'>
+  ): CanvasEntityAdapterAnnotationLayer => {
+    const adapter = new CanvasEntityAdapterAnnotationLayer(entityIdentifier, this);
+    this.adapters.annotationLayers.set(adapter.id, adapter);
+    return adapter;
+  };
+
   enableDebugging() {
     this._isDebugging = true;
     this.logDebugInfo();
@@ -269,6 +284,10 @@ export class CanvasManager extends CanvasModuleBase {
     this.log.debug('Destroying module');
 
     for (const adapter of this.getAllAdapters()) {
+      adapter.destroy();
+    }
+
+    for (const adapter of this.adapters.annotationLayers.values()) {
       adapter.destroy();
     }
 

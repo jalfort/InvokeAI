@@ -15,6 +15,7 @@ import {
   previewBlob,
 } from 'features/controlLayers/konva/util';
 import {
+  selectActiveAnnotationLayerEntities,
   selectActiveControlLayerEntities,
   selectActiveInpaintMaskEntities,
   selectActiveRasterLayerEntities,
@@ -157,6 +158,9 @@ export class CanvasCompositorModule extends CanvasModuleBase {
       case 'regional_guidance':
         entities = this.manager.stateApi.getRegionsState().entities;
         break;
+      case 'annotation_layer':
+        // Annotation layers are composited separately via overlayAnnotationsOnCanvas
+        return [] as CanvasEntityAdapterFromType<T>[];
       default:
         assert(false, `Unhandled entity type: ${type}`);
     }
@@ -247,6 +251,43 @@ export class CanvasCompositorModule extends CanvasModuleBase {
   };
 
   /**
+   * Overlays visible annotation layers onto an existing canvas, clipped to the given rect.
+   * Used at generation time to bake non-destructive annotations into the composite image.
+   *
+   * @param canvas The canvas to draw annotations onto (modified in place)
+   * @param rect The region used for clipping annotation content
+   */
+  overlayAnnotationsOnCanvas = (canvas: HTMLCanvasElement, rect: Rect): void => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+
+    for (const adapter of this.manager.adapters.annotationLayers.values()) {
+      if (!adapter.state.isEnabled || adapter.state.objects.length === 0) {
+        continue;
+      }
+      const annotationCanvas = adapter.getCanvas(rect);
+      if (annotationCanvas) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(annotationCanvas, 0, 0);
+      }
+    }
+  };
+
+  /**
+   * Returns true if any visible annotation layers have objects that could overlap the given rect.
+   */
+  hasVisibleAnnotations = (): boolean => {
+    for (const adapter of this.manager.adapters.annotationLayers.values()) {
+      if (adapter.state.isEnabled && adapter.state.objects.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  /**
    * Composites the given canvas entities for the given rect and uploads the resulting image.
    *
    * The uploaded image is cached to avoid recomputing it when the canvas state has not changed. The canvas elements
@@ -309,6 +350,101 @@ export class CanvasCompositorModule extends CanvasModuleBase {
     const uploadResult = await withResultAsync(() =>
       uploadImage({
         file: new File([blob], 'canvas-composite.png', { type: 'image/png' }),
+        image_category: 'general',
+        ...uploadOptions,
+      })
+    );
+    this.$isUploading.set(false);
+    if (uploadResult.isErr()) {
+      throw uploadResult.error;
+    }
+    imageDTO = uploadResult.value;
+    this.manager.cache.imageNameCache.set(hash, imageDTO.image_name);
+    return imageDTO;
+  };
+
+  /**
+   * Composites the given canvas entities for the given rect, overlays any visible annotation layers on top,
+   * and uploads the resulting image. Used at generation time to bake annotations into the composite.
+   *
+   * If no annotations are visible, behaves identically to `getCompositeImageDTO`.
+   *
+   * @param adapters The adapters for the canvas entities to composite
+   * @param rect The region to include in the rasterized image
+   * @param uploadOptions Options for uploading the image
+   * @param compositingOptions Options for compositing the entities
+   * @param forceUpload If true, the image is always re-uploaded
+   * @returns A promise that resolves to the image DTO
+   */
+  getCompositeImageDTOWithAnnotations = async (
+    adapters: CanvasEntityAdapter[],
+    rect: Rect,
+    uploadOptions: SetOptional<Omit<UploadImageArg, 'file'>, 'image_category'>,
+    compositingOptions?: CompositingOptions,
+    forceUpload?: boolean
+  ): Promise<ImageDTO> => {
+    // If no annotations are visible, delegate to the standard method (preserves its cache)
+    if (!this.hasVisibleAnnotations()) {
+      return this.getCompositeImageDTO(adapters, rect, uploadOptions, compositingOptions, forceUpload);
+    }
+
+    assert(rect.width > 0 && rect.height > 0, 'Unable to rasterize empty rect');
+
+    // Build a cache key that includes both raster adapter state and annotation state
+    const annotationHashes: JsonObject[] = [];
+    for (const adapter of this.manager.adapters.annotationLayers.values()) {
+      if (adapter.state.isEnabled && adapter.state.objects.length > 0) {
+        annotationHashes.push({ id: adapter.id, objects: adapter.state.objects as unknown as JsonObject[] });
+      }
+    }
+    const hash = this.getCompositeHash(adapters, { rect, annotations: annotationHashes });
+    const cachedImageName = forceUpload ? undefined : this.manager.cache.imageNameCache.get(hash);
+
+    let imageDTO: ImageDTO | null = null;
+
+    if (cachedImageName) {
+      imageDTO = await getImageDTOSafe(cachedImageName);
+      if (imageDTO) {
+        this.log.debug({ rect, imageName: cachedImageName }, 'Using cached composite+annotations image');
+        return imageDTO;
+      }
+      this.log.warn({ rect, imageName: cachedImageName }, 'Cached image name not found, recompositing');
+    }
+
+    const getCompositeCanvasResult = withResult(() => this.getCompositeCanvas(adapters, rect, compositingOptions));
+
+    if (getCompositeCanvasResult.isErr()) {
+      this.log.error(
+        { error: serializeError(getCompositeCanvasResult.error) },
+        'Failed to get composite canvas for annotations'
+      );
+      throw getCompositeCanvasResult.error;
+    }
+
+    // Overlay annotations on top of the raster composite
+    this.overlayAnnotationsOnCanvas(getCompositeCanvasResult.value, rect);
+
+    this.$isProcessing.set(true);
+    const blobResult = await withResultAsync(() => canvasToBlob(getCompositeCanvasResult.value));
+    this.$isProcessing.set(false);
+
+    if (blobResult.isErr()) {
+      this.log.error(
+        { error: serializeError(blobResult.error) },
+        'Failed to convert composite+annotations canvas to blob'
+      );
+      throw blobResult.error;
+    }
+    const blob = blobResult.value;
+
+    if (this.manager._isDebugging) {
+      previewBlob(blob, 'Composite+Annotations');
+    }
+
+    this.$isUploading.set(true);
+    const uploadResult = await withResultAsync(() =>
+      uploadImage({
+        file: new File([blob], 'canvas-composite-annotated.png', { type: 'image/png' }),
         image_category: 'general',
         ...uploadOptions,
       })
@@ -394,6 +530,9 @@ export class CanvasCompositorModule extends CanvasModuleBase {
       case 'control_layer':
         this.manager.stateApi.addControlLayer(addEntityArg);
         break;
+      case 'annotation_layer':
+        // Annotation layers cannot be created from merging
+        break;
       default:
         assert<Equals<typeof type, never>>(false, 'Unsupported type for merge');
     }
@@ -477,6 +616,9 @@ export class CanvasCompositorModule extends CanvasModuleBase {
         break;
       case 'control_layer':
         entities = this.manager.stateApi.runSelector(selectActiveControlLayerEntities);
+        break;
+      case 'annotation_layer':
+        entities = this.manager.stateApi.runSelector(selectActiveAnnotationLayerEntities);
         break;
       default:
         assert<Equals<typeof type, never>>(false, 'Unsupported type for merge');

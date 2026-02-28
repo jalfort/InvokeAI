@@ -52,8 +52,10 @@ import {
 } from 'services/api/types';
 
 import type {
+  AnnotationObject,
   AspectRatioID,
   BoundingBoxScaleMethod,
+  CanvasAnnotationLayerState,
   CanvasControlLayerState,
   CanvasEntityIdentifier,
   CanvasRasterLayerState,
@@ -85,6 +87,7 @@ import {
 } from './types';
 import {
   converters,
+  getAnnotationLayerState,
   getControlLayerState,
   getInpaintMaskState,
   getRasterLayerState,
@@ -1173,6 +1176,71 @@ const slice = createSlice({
         entity.denoiseLimit = undefined;
       }
     },
+    //#region Annotation layers
+    annotationLayerAdded: {
+      reducer: (
+        state,
+        action: PayloadAction<{
+          id: string;
+          overrides?: Partial<CanvasAnnotationLayerState>;
+          isSelected?: boolean;
+        }>
+      ) => {
+        const { id, overrides, isSelected } = action.payload;
+        const entityState = getAnnotationLayerState(id, overrides);
+        state.annotationLayers.entities.push(entityState);
+        if (isSelected) {
+          state.selectedEntityIdentifier = getEntityIdentifier(entityState);
+        }
+      },
+      prepare: (payload?: { overrides?: Partial<CanvasAnnotationLayerState>; isSelected?: boolean }) => ({
+        payload: { ...payload, id: getPrefixedId('annotation_layer') },
+      }),
+    },
+    annotationObjectAdded: (
+      state,
+      action: PayloadAction<EntityIdentifierPayload<{ annotationObject: AnnotationObject }, 'annotation_layer'>>
+    ) => {
+      const { entityIdentifier, annotationObject } = action.payload;
+      const entity = selectEntity(state, entityIdentifier);
+      if (!entity) {
+        return;
+      }
+      entity.objects.push(annotationObject);
+    },
+    annotationObjectRemoved: (
+      state,
+      action: PayloadAction<EntityIdentifierPayload<{ objectId: string }, 'annotation_layer'>>
+    ) => {
+      const { entityIdentifier, objectId } = action.payload;
+      const entity = selectEntity(state, entityIdentifier);
+      if (!entity) {
+        return;
+      }
+      entity.objects = entity.objects.filter((obj) => obj.id !== objectId);
+    },
+    annotationObjectUpdated: (
+      state,
+      action: PayloadAction<EntityIdentifierPayload<{ objectId: string; changes: Partial<AnnotationObject> }, 'annotation_layer'>>
+    ) => {
+      const { entityIdentifier, objectId, changes } = action.payload;
+      const entity = selectEntity(state, entityIdentifier);
+      if (!entity) {
+        return;
+      }
+      const obj = entity.objects.find((o) => o.id === objectId);
+      if (obj) {
+        Object.assign(obj, changes);
+      }
+    },
+    annotationLayerReset: (state, action: PayloadAction<EntityIdentifierPayload<void, 'annotation_layer'>>) => {
+      const { entityIdentifier } = action.payload;
+      const entity = selectEntity(state, entityIdentifier);
+      if (!entity) {
+        return;
+      }
+      entity.objects = [];
+    },
     //#region BBox
     bboxScaledWidthChanged: (state, action: PayloadAction<number>) => {
       const gridSize = getGridSize(state.bbox.modelBase);
@@ -1390,7 +1458,9 @@ const slice = createSlice({
       }
       entity.isEnabled = true;
       entity.objects = [];
-      entity.position = { x: 0, y: 0 };
+      if (entity.type !== 'annotation_layer') {
+        entity.position = { x: 0, y: 0 };
+      }
     },
     entityDuplicated: (state, action: PayloadAction<EntityIdentifierPayload>) => {
       const { entityIdentifier } = action.payload;
@@ -1429,6 +1499,12 @@ const slice = createSlice({
           newEntity.id = getPrefixedId('inpaint_mask');
           const newEntityIndex = state.inpaintMasks.entities.findIndex((e) => e.id === entityIdentifier.id) + 1;
           state.inpaintMasks.entities.splice(newEntityIndex, 0, newEntity);
+          break;
+        }
+        case 'annotation_layer': {
+          newEntity.id = getPrefixedId('annotation_layer');
+          const newEntityIndex = state.annotationLayers.entities.findIndex((e) => e.id === entityIdentifier.id) + 1;
+          state.annotationLayers.entities.splice(newEntityIndex, 0, newEntity);
           break;
         }
       }
@@ -1476,7 +1552,7 @@ const slice = createSlice({
     entityMovedTo: (state, action: PayloadAction<EntityMovedToPayload>) => {
       const { entityIdentifier, position } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
-      if (!entity) {
+      if (!entity || entity.type === 'annotation_layer') {
         return;
       }
 
@@ -1485,7 +1561,7 @@ const slice = createSlice({
     entityMovedBy: (state, action: PayloadAction<EntityMovedByPayload>) => {
       const { entityIdentifier, offset } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
-      if (!entity) {
+      if (!entity || entity.type === 'annotation_layer') {
         return;
       }
 
@@ -1495,7 +1571,7 @@ const slice = createSlice({
     entityRasterized: (state, action: PayloadAction<EntityRasterizedPayload>) => {
       const { entityIdentifier, imageObject, position, replaceObjects, isSelected } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
-      if (!entity) {
+      if (!entity || entity.type === 'annotation_layer') {
         return;
       }
 
@@ -1511,7 +1587,7 @@ const slice = createSlice({
     entityBrushLineAdded: (state, action: PayloadAction<EntityBrushLineAddedPayload>) => {
       const { entityIdentifier, brushLine } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
-      if (!entity) {
+      if (!entity || entity.type === 'annotation_layer') {
         return;
       }
 
@@ -1529,7 +1605,7 @@ const slice = createSlice({
     entityEraserLineAdded: (state, action: PayloadAction<EntityEraserLineAddedPayload>) => {
       const { entityIdentifier, eraserLine } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
-      if (!entity) {
+      if (!entity || entity.type === 'annotation_layer') {
         return;
       }
 
@@ -1544,7 +1620,7 @@ const slice = createSlice({
     entityRectAdded: (state, action: PayloadAction<EntityRectAddedPayload>) => {
       const { entityIdentifier, rect } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
-      if (!entity) {
+      if (!entity || entity.type === 'annotation_layer') {
         return;
       }
 
@@ -1555,7 +1631,7 @@ const slice = createSlice({
     entityGradientAdded: (state, action: PayloadAction<EntityGradientAddedPayload>) => {
       const { entityIdentifier, gradient } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
-      if (!entity) {
+      if (!entity || entity.type === 'annotation_layer') {
         return;
       }
 
@@ -1566,7 +1642,7 @@ const slice = createSlice({
     entityImageAdded: (state, action: PayloadAction<EntityImageAddedPayload>) => {
       const { entityIdentifier, imageObject } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
-      if (!entity) {
+      if (!entity || entity.type === 'annotation_layer') {
         return;
       }
 
@@ -1600,6 +1676,11 @@ const slice = createSlice({
           break;
         case 'inpaint_mask':
           state.inpaintMasks.entities = state.inpaintMasks.entities.filter((rg) => rg.id !== entityIdentifier.id);
+          break;
+        case 'annotation_layer':
+          state.annotationLayers.entities = state.annotationLayers.entities.filter(
+            (layer) => layer.id !== entityIdentifier.id
+          );
           break;
       }
 
@@ -1669,12 +1750,18 @@ const slice = createSlice({
             entityIdentifiers as CanvasEntityIdentifier<'regional_guidance'>[]
           );
           break;
+        case 'annotation_layer':
+          state.annotationLayers.entities = reorderEntities(
+            state.annotationLayers.entities,
+            entityIdentifiers as CanvasEntityIdentifier<'annotation_layer'>[]
+          );
+          break;
       }
     },
     entityOpacityChanged: (state, action: PayloadAction<EntityIdentifierPayload<{ opacity: number }>>) => {
       const { entityIdentifier, opacity } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
-      if (!entity) {
+      if (!entity || entity.type === 'annotation_layer') {
         return;
       }
       entity.opacity = opacity;
@@ -1695,6 +1782,9 @@ const slice = createSlice({
         case 'regional_guidance':
           state.regionalGuidance.isHidden = !state.regionalGuidance.isHidden;
           break;
+        case 'annotation_layer':
+          state.annotationLayers.isHidden = !state.annotationLayers.isHidden;
+          break;
       }
     },
     allNonRasterLayersIsHiddenToggled: (state) => {
@@ -1714,6 +1804,7 @@ const slice = createSlice({
       state.controlLayers = initialState.controlLayers;
       state.inpaintMasks = initialState.inpaintMasks;
       state.regionalGuidance = initialState.regionalGuidance;
+      state.annotationLayers = initialState.annotationLayers;
     },
     canvasMetadataRecalled: (state, action: PayloadAction<CanvasMetadata>) => {
       const { controlLayers, inpaintMasks, rasterLayers, regionalGuidance } = action.payload;
@@ -1878,6 +1969,12 @@ export const {
   inpaintMaskDenoiseLimitChanged,
   inpaintMaskDenoiseLimitDeleted,
   // inpaintMaskRecalled,
+  // Annotation layers
+  annotationLayerAdded,
+  annotationObjectAdded,
+  annotationObjectRemoved,
+  annotationObjectUpdated,
+  annotationLayerReset,
 } = slice.actions;
 
 const syncScaledSize = (state: CanvasState) => {

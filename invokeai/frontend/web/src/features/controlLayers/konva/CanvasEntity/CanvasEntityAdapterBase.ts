@@ -322,8 +322,11 @@ export abstract class CanvasEntityAdapterBase<T extends CanvasEntityState, U ext
 
   /**
    * A redux selector that selects the entity's position from the canvas slice.
+   * Returns undefined for entity types without position (e.g. annotation layers).
    */
-  selectPosition = createSelector(this.selectState, (entity) => entity?.position);
+  selectPosition = createSelector(this.selectState, (entity) =>
+    entity && 'position' in entity ? (entity.position as { x: number; y: number }) : undefined
+  );
 
   syncIsOnscreen = () => {
     const stageRect = this.manager.stage.getScaledStageRect();

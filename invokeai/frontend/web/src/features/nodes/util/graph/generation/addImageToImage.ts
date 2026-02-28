@@ -62,7 +62,7 @@ export const addImageToImage = async ({
   }
 
   const adapters = manager.compositor.getVisibleAdaptersOfType('raster_layer');
-  const { image_name } = await manager.compositor.getCompositeImageDTO(adapters, rect, {
+  const { image_name } = await manager.compositor.getCompositeImageDTOWithAnnotations(adapters, rect, {
     is_intermediate: true,
     silent: true,
   });

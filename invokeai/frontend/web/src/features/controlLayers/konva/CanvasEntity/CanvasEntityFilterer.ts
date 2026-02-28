@@ -434,6 +434,9 @@ export class CanvasEntityFilterer extends CanvasModuleBase {
       case 'regional_guidance':
         this.manager.stateApi.addRegionalGuidance(arg);
         break;
+      case 'annotation_layer':
+        // Annotation layers cannot be created from filter results
+        break;
       default:
         assert<Equals<typeof type, never>>(false);
     }

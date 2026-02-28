@@ -10,7 +10,6 @@ import { selectCanvasSlice, selectEntityOrThrow } from 'features/controlLayers/s
 import type { CanvasEntityIdentifier } from 'features/controlLayers/store/types';
 import {
   getControlLayerWarnings,
-  getGlobalReferenceImageWarnings,
   getInpaintMaskWarnings,
   getRasterLayerWarnings,
   getRegionalGuidanceWarnings,
@@ -40,8 +39,8 @@ const buildSelectWarnings = (entityIdentifier: CanvasEntityIdentifier, t: TFunct
       warnings = getInpaintMaskWarnings(entity, model);
     } else if (entityType === 'raster_layer') {
       warnings = getRasterLayerWarnings(entity, model);
-    } else if (entityType === 'reference_image') {
-      warnings = getGlobalReferenceImageWarnings(entity, model);
+    } else if (entityType === 'annotation_layer') {
+      // Annotation layers have no warnings
     } else {
       assert<Equals<typeof entityType, never>>(false, 'Unexpected entity type');
     }

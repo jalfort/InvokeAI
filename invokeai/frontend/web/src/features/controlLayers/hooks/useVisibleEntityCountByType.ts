@@ -1,6 +1,7 @@
 import { createSelector } from '@reduxjs/toolkit';
 import { useAppSelector } from 'app/store/storeHooks';
 import {
+  selectActiveAnnotationLayerEntities,
   selectActiveControlLayerEntities,
   selectActiveInpaintMaskEntities,
   selectActiveRasterLayerEntities,
@@ -21,6 +22,8 @@ export const useVisibleEntityCountByType = (type: CanvasEntityIdentifier['type']
         return createSelector(selectActiveInpaintMaskEntities, (entities) => entities.length);
       case 'regional_guidance':
         return createSelector(selectActiveRegionalGuidanceEntities, (entities) => entities.length);
+      case 'annotation_layer':
+        return createSelector(selectActiveAnnotationLayerEntities, (entities) => entities.length);
       default:
         assert(false, 'Invalid entity type');
     }

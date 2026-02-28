@@ -2,6 +2,7 @@ import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
 import { getPrefixedId } from 'features/controlLayers/konva/util';
 import {
+  selectAnnotationLayerEntities,
   selectCanvasSlice,
   selectControlLayerEntities,
   selectInpaintMaskEntities,
@@ -9,6 +10,7 @@ import {
   selectRegionalGuidanceEntities,
 } from 'features/controlLayers/store/selectors';
 import type {
+  CanvasAnnotationLayerState,
   CanvasControlLayerState,
   CanvasInpaintMaskState,
   CanvasRasterLayerState,
@@ -54,6 +56,10 @@ export class CanvasEntityRendererModule extends CanvasModuleBase {
       this.manager.stateApi.createStoreSubscription(selectRegionalGuidanceEntities, this.createNewRegionalGuidance)
     );
 
+    this.subscriptions.add(
+      this.manager.stateApi.createStoreSubscription(selectAnnotationLayerEntities, this.createNewAnnotationLayers)
+    );
+
     this.subscriptions.add(this.manager.stateApi.createStoreSubscription(selectCanvasSlice, this.arrangeEntities));
   }
 
@@ -63,6 +69,7 @@ export class CanvasEntityRendererModule extends CanvasModuleBase {
     this.createNewControlLayers(this.manager.stateApi.runSelector(selectControlLayerEntities));
     this.createNewRegionalGuidance(this.manager.stateApi.runSelector(selectRegionalGuidanceEntities));
     this.createNewInpaintMasks(this.manager.stateApi.runSelector(selectInpaintMaskEntities));
+    this.createNewAnnotationLayers(this.manager.stateApi.runSelector(selectAnnotationLayerEntities));
     this.arrangeEntities(this.manager.stateApi.runSelector(selectCanvasSlice), null);
   };
 
@@ -102,6 +109,15 @@ export class CanvasEntityRendererModule extends CanvasModuleBase {
     }
   };
 
+  createNewAnnotationLayers = (entities: CanvasAnnotationLayerState[]) => {
+    for (const entityState of entities) {
+      if (!this.manager.adapters.annotationLayers.has(entityState.id)) {
+        const adapter = this.manager.createAnnotationLayerAdapter(getEntityIdentifier(entityState));
+        adapter.initialize();
+      }
+    }
+  };
+
   arrangeEntities = (state: CanvasState, prevState: CanvasState | null) => {
     if (
       !prevState ||
@@ -109,6 +125,7 @@ export class CanvasEntityRendererModule extends CanvasModuleBase {
       state.controlLayers.entities !== prevState.controlLayers.entities ||
       state.regionalGuidance.entities !== prevState.regionalGuidance.entities ||
       state.inpaintMasks.entities !== prevState.inpaintMasks.entities ||
+      state.annotationLayers.entities !== prevState.annotationLayers.entities ||
       state.selectedEntityIdentifier?.id !== prevState.selectedEntityIdentifier?.id
     ) {
       this.log.trace('Arranging entities');
@@ -121,7 +138,8 @@ export class CanvasEntityRendererModule extends CanvasModuleBase {
       // 3. Control layers
       // 4. Regions
       // 5. Inpaint masks
-      // 6. Preview layer (bbox, staging area, progress image, tool)
+      // 6. Annotation layers
+      // 7. Preview layer (bbox, staging area, progress image, tool)
 
       this.manager.background.konva.layer.zIndex(zIndex++);
 
@@ -139,6 +157,10 @@ export class CanvasEntityRendererModule extends CanvasModuleBase {
 
       for (const { id } of this.manager.stateApi.getInpaintMasksState().entities) {
         this.manager.adapters.inpaintMasks.get(id)?.konva.layer.zIndex(zIndex++);
+      }
+
+      for (const { id } of this.manager.stateApi.getAnnotationLayersState().entities) {
+        this.manager.adapters.annotationLayers.get(id)?.konva.layer.zIndex(zIndex++);
       }
 
       this.manager.konva.previewLayer.zIndex(zIndex++);

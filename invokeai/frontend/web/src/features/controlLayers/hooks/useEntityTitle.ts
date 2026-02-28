@@ -34,6 +34,8 @@ export const useEntityTypeName = (type: CanvasEntityIdentifier['type']) => {
         return t('controlLayers.rasterLayer');
       case 'regional_guidance':
         return t('controlLayers.regionalGuidance');
+      case 'annotation_layer':
+        return t('controlLayers.annotationLayer');
       default:
         assert(false, 'Unexpected entity type');
     }

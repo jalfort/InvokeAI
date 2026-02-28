@@ -65,7 +65,7 @@ export const buildExternalAPIGraph = async (arg: GraphBuilderArg): Promise<Graph
     const rasterAdapters = manager.compositor.getVisibleAdaptersOfType('raster_layer');
 
     if (rasterAdapters.length > 0) {
-      const compositeDTO = await manager.compositor.getCompositeImageDTO(rasterAdapters, rect, {
+      const compositeDTO = await manager.compositor.getCompositeImageDTOWithAnnotations(rasterAdapters, rect, {
         is_intermediate: true,
         silent: true,
       });

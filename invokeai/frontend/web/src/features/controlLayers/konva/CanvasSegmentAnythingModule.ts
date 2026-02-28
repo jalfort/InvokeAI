@@ -1327,6 +1327,9 @@ export class CanvasSegmentAnythingModule extends CanvasModuleBase {
       case 'regional_guidance':
         this.manager.stateApi.addRegionalGuidance(arg);
         break;
+      case 'annotation_layer':
+        // Annotation layers cannot be created from segmentation results
+        break;
       default:
         assert<Equals<typeof type, never>>(false);
     }

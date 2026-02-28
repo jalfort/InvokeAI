@@ -19,7 +19,6 @@ import { selectBboxModelBase, selectBboxRect } from 'features/controlLayers/stor
 import type {
   CanvasControlLayerState,
   CanvasEntityIdentifier,
-  CanvasEntityState,
   CanvasEntityType,
   CanvasImageState,
   CanvasInpaintMaskState,
@@ -86,7 +85,7 @@ export const createNewCanvasEntityFromImage = async (arg: {
   withResize?: boolean;
   dispatch: AppDispatch;
   getState: AppGetState;
-  overrides?: Partial<Pick<CanvasEntityState, 'isEnabled' | 'isLocked' | 'name' | 'position'>>;
+  overrides?: Partial<{ isEnabled: boolean; isLocked: boolean; name: string | null; position: { x: number; y: number } }>;
 }) => {
   const { type, imageDTO, dispatch, getState, withResize, overrides: _overrides } = arg;
   const state = getState();
@@ -284,6 +283,9 @@ export const newCanvasFromImage = async (arg: {
       dispatch(canvasClearHistory());
       break;
     }
+    case 'annotation_layer':
+      // Annotation layers cannot be created from images
+      break;
     default:
       assert<Equals<typeof type, never>>(false);
   }

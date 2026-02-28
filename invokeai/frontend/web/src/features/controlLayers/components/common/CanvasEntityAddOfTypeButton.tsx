@@ -1,4 +1,5 @@
 import { IconButton } from '@invoke-ai/ui-library';
+import { useAppDispatch } from 'app/store/storeHooks';
 import { NewLayerIcon } from 'features/controlLayers/components/common/icons';
 import {
   useAddControlLayer,
@@ -7,6 +8,7 @@ import {
   useAddRegionalGuidance,
 } from 'features/controlLayers/hooks/addLayerHooks';
 import { useCanvasIsBusy } from 'features/controlLayers/hooks/useCanvasIsBusy';
+import { annotationLayerAdded } from 'features/controlLayers/store/canvasSlice';
 import type { CanvasEntityIdentifier } from 'features/controlLayers/store/types';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +19,7 @@ type Props = {
 
 export const CanvasEntityAddOfTypeButton = memo(({ type }: Props) => {
   const { t } = useTranslation();
+  const dispatch = useAppDispatch();
   const isBusy = useCanvasIsBusy();
   const addInpaintMask = useAddInpaintMask();
   const addRegionalGuidance = useAddRegionalGuidance();
@@ -37,8 +40,11 @@ export const CanvasEntityAddOfTypeButton = memo(({ type }: Props) => {
       case 'control_layer':
         addControlLayer();
         break;
+      case 'annotation_layer':
+        dispatch(annotationLayerAdded({ isSelected: true }));
+        break;
     }
-  }, [addControlLayer, addInpaintMask, addRasterLayer, addRegionalGuidance, type]);
+  }, [addControlLayer, addInpaintMask, addRasterLayer, addRegionalGuidance, dispatch, type]);
 
   const label = useMemo(() => {
     switch (type) {
@@ -50,6 +56,8 @@ export const CanvasEntityAddOfTypeButton = memo(({ type }: Props) => {
         return t('controlLayers.addRasterLayer');
       case 'control_layer':
         return t('controlLayers.addControlLayer');
+      case 'annotation_layer':
+        return t('controlLayers.addAnnotationLayer');
     }
   }, [type, t]);
 

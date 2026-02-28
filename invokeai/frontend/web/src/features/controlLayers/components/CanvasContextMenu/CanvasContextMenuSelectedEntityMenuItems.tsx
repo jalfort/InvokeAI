@@ -3,7 +3,6 @@ import { useAppSelector } from 'app/store/storeHooks';
 import { ControlLayerMenuItems } from 'features/controlLayers/components/ControlLayer/ControlLayerMenuItems';
 import { InpaintMaskMenuItems } from 'features/controlLayers/components/InpaintMask/InpaintMaskMenuItems';
 import { RasterLayerMenuItems } from 'features/controlLayers/components/RasterLayer/RasterLayerMenuItems';
-import { IPAdapterMenuItems } from 'features/controlLayers/components/RefImage/IPAdapterMenuItems';
 import { RegionalGuidanceMenuItems } from 'features/controlLayers/components/RegionalGuidance/RegionalGuidanceMenuItems';
 import { CanvasEntityStateGate } from 'features/controlLayers/contexts/CanvasEntityStateGate';
 import {
@@ -32,8 +31,9 @@ const CanvasContextMenuSelectedEntityMenuItemsContent = memo(() => {
   if (entityIdentifier.type === 'regional_guidance') {
     return <RegionalGuidanceMenuItems />;
   }
-  if (entityIdentifier.type === 'reference_image') {
-    return <IPAdapterMenuItems />;
+  if (entityIdentifier.type === 'annotation_layer') {
+    // Annotation layers use the standard entity menu items (delete, rename, etc.)
+    return null;
   }
 
   assert<Equals<typeof entityIdentifier.type, never>>(false);
