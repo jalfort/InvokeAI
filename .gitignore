@@ -133,7 +133,14 @@ celerybeat.pid
 
 # Environments
 .env
+.env_EXAMPLE
 .venv*
+
+# User config and data (may contain API keys)
+invokeai.yaml
+invokeai.yaml.bak
+dynamic_endpoints.json
+prompt_library.json
 env/
 venv/
 ENV/
