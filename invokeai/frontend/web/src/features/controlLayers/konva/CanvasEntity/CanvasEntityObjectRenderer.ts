@@ -374,7 +374,12 @@ export class CanvasEntityObjectRenderer extends CanvasModuleBase {
       }
 
       didRender = renderer.update(objectState, force || isFirstRender);
-    } else if (objectState.type === 'soft_brush_line' || objectState.type === 'soft_brush_line_with_pressure') {
+    } else if (
+      objectState.type === 'soft_brush_line' ||
+      objectState.type === 'soft_brush_line_with_pressure' ||
+      objectState.type === 'soft_eraser_line' ||
+      objectState.type === 'soft_eraser_line_with_pressure'
+    ) {
       assert(renderer instanceof CanvasObjectSoftBrushLine || !renderer);
 
       if (!renderer) {
@@ -466,6 +471,9 @@ export class CanvasEntityObjectRenderer extends CanvasModuleBase {
     let needsPixelBbox = false;
     for (const renderer of this.renderers.values()) {
       const isEraserLine = renderer instanceof CanvasObjectEraserLine;
+      const isSoftEraserLine =
+        renderer instanceof CanvasObjectSoftBrushLine &&
+        (renderer.state.type === 'soft_eraser_line' || renderer.state.type === 'soft_eraser_line_with_pressure');
       const isImage = renderer instanceof CanvasObjectImage;
       const imageIgnoresTransparency = isImage && renderer.state.usePixelBbox === false;
       const hasClip =
@@ -473,7 +481,7 @@ export class CanvasEntityObjectRenderer extends CanvasModuleBase {
           renderer instanceof CanvasObjectSoftBrushLine ||
           renderer instanceof CanvasObjectCloneBrushLine) &&
         renderer.state.clip;
-      if (isEraserLine || hasClip || (isImage && !imageIgnoresTransparency)) {
+      if (isEraserLine || isSoftEraserLine || hasClip || (isImage && !imageIgnoresTransparency)) {
         needsPixelBbox = true;
         break;
       }

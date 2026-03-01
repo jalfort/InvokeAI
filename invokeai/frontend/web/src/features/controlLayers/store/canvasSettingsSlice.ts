@@ -58,6 +58,14 @@ const zCanvasSettingsState = z.object({
    */
   eraserWidth: z.int().gt(0),
   /**
+   * The hardness of the eraser tool (0 = fully soft, 1 = hard edge).
+   */
+  eraserHardness: z.number().min(0).max(1).default(1),
+  /**
+   * The opacity of the eraser tool (0 = transparent, 1 = full erase).
+   */
+  eraserOpacity: z.number().min(0).max(1).default(1),
+  /**
    * The colors to use when drawing lines or filling shapes.
    */
   activeColor: z.enum(['bgColor', 'fgColor']),
@@ -209,6 +217,8 @@ const getInitialState = (): CanvasSettingsState => ({
   brushHardness: 1,
   brushOpacity: 1,
   eraserWidth: 50,
+  eraserHardness: 1,
+  eraserOpacity: 1,
   activeColor: 'fgColor',
   bgColor: RGBA_BLACK,
   fgColor: RGBA_WHITE,
@@ -269,6 +279,12 @@ const slice = createSlice({
     },
     settingsEraserWidthChanged: (state, action: PayloadAction<CanvasSettingsState['eraserWidth']>) => {
       state.eraserWidth = Math.round(action.payload);
+    },
+    settingsEraserHardnessChanged: (state, action: PayloadAction<CanvasSettingsState['eraserHardness']>) => {
+      state.eraserHardness = action.payload;
+    },
+    settingsEraserOpacityChanged: (state, action: PayloadAction<CanvasSettingsState['eraserOpacity']>) => {
+      state.eraserOpacity = action.payload;
     },
     settingsActiveColorToggled: (state) => {
       state.activeColor = state.activeColor === 'bgColor' ? 'fgColor' : 'bgColor';
@@ -411,6 +427,8 @@ export const {
   settingsBrushHardnessChanged,
   settingsBrushOpacityChanged,
   settingsEraserWidthChanged,
+  settingsEraserHardnessChanged,
+  settingsEraserOpacityChanged,
   settingsActiveColorToggled,
   settingsBgColorChanged,
   settingsFgColorChanged,
@@ -499,6 +517,8 @@ export const selectSelectionOverlayOpacity = createCanvasSettingsSelector(
 export const selectSelectionOverlayColor = createCanvasSettingsSelector((settings) => settings.selectionOverlayColor);
 export const selectBrushHardness = createCanvasSettingsSelector((settings) => settings.brushHardness);
 export const selectBrushOpacity = createCanvasSettingsSelector((settings) => settings.brushOpacity);
+export const selectEraserHardness = createCanvasSettingsSelector((settings) => settings.eraserHardness);
+export const selectEraserOpacity = createCanvasSettingsSelector((settings) => settings.eraserOpacity);
 export const selectCloneBrushAlignedMode = createCanvasSettingsSelector((settings) => settings.cloneBrushAlignedMode);
 export const selectCloneBrushSampleMode = createCanvasSettingsSelector((settings) => settings.cloneBrushSampleMode);
 export const selectAnnotationMode = createCanvasSettingsSelector((settings) => settings.annotationMode);

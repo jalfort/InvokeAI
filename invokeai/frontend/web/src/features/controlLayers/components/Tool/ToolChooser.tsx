@@ -19,8 +19,8 @@ export const ToolChooser: React.FC = () => {
     <>
       <ButtonGroup isAttached orientation="vertical">
         <ToolBrushButton />
-        <ToolCloneBrushButton />
         <ToolEraserButton />
+        <ToolCloneBrushButton />
         <ToolRectButton />
         <ToolGradientButton />
         <ToolSelectionButton />

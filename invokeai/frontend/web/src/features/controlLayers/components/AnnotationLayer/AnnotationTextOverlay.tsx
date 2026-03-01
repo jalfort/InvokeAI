@@ -122,6 +122,11 @@ export const AnnotationTextOverlay = memo(() => {
     e.preventDefault();
   }, []);
 
+  // Prevent font size input's mousedown/pointerdown from triggering the parent's preventFocusLoss
+  const stopPropagationHandler = useCallback((e: ReactMouseEvent) => {
+    e.stopPropagation();
+  }, []);
+
   const toggleBold = useCallback(() => {
     const current = fontStyle;
     if (current.includes('bold')) {
@@ -333,8 +338,8 @@ export const AnnotationTextOverlay = memo(() => {
             step={2}
             value={fontSize}
             onChange={onFontSizeChange}
-            onMouseDown={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={stopPropagationHandler}
+            onPointerDown={stopPropagationHandler}
             style={{
               width: 44,
               height: 26,

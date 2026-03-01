@@ -19,6 +19,8 @@ import type {
   CanvasRectState,
   CanvasSoftBrushLineState,
   CanvasSoftBrushLineWithPressureState,
+  CanvasSoftEraserLineState,
+  CanvasSoftEraserLineWithPressureState,
 } from 'features/controlLayers/store/types';
 
 /**
@@ -47,6 +49,8 @@ export type AnyObjectState =
   | CanvasCloneBrushLineWithPressureState
   | CanvasEraserLineState
   | CanvasEraserLineWithPressureState
+  | CanvasSoftEraserLineState
+  | CanvasSoftEraserLineWithPressureState
   | CanvasImageState
   | CanvasRectState
   | CanvasGradientState;

@@ -6,15 +6,21 @@ import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase'
 import type {
   CanvasSoftBrushLineState,
   CanvasSoftBrushLineWithPressureState,
+  CanvasSoftEraserLineState,
+  CanvasSoftEraserLineWithPressureState,
 } from 'features/controlLayers/store/types';
 import Konva from 'konva';
 import type { Logger } from 'roarr';
 
-type SoftBrushState = CanvasSoftBrushLineState | CanvasSoftBrushLineWithPressureState;
+type SoftBrushState =
+  | CanvasSoftBrushLineState
+  | CanvasSoftBrushLineWithPressureState
+  | CanvasSoftEraserLineState
+  | CanvasSoftEraserLineWithPressureState;
 
 /**
- * Renders soft brush lines with Gaussian falloff via Uint8Array mask buffer stamping.
- * Handles both regular and pressure-sensitive variants.
+ * Renders soft brush AND soft eraser lines with Gaussian falloff via Uint8Array mask buffer stamping.
+ * Handles brush (source-over) and eraser (destination-out) modes, as well as regular and pressure-sensitive variants.
  *
  * Architecture (Krita-style max-alpha / ALPHA_DARKEN):
  * - Pre-computed dab profile (Uint8Array with alpha-only radial values)
@@ -23,8 +29,9 @@ type SoftBrushState = CanvasSoftBrushLineState | CanvasSoftBrushLineWithPressure
  * - Dirty rect tracking for efficient putImageData
  * - Stroke-level opacity via Konva group (caps visible alpha)
  *
- * This prevents the soft falloff destruction that occurs with source-over canvas
- * compositing, where overlapping dabs accumulate alpha (e.g., 5 dabs at 0.3 -> 0.83).
+ * For eraser mode: globalCompositeOperation is set to 'destination-out' on the rasterized
+ * Konva.Image. destination-out with semi-transparent pixels produces proportional erasure
+ * (alpha_out = alpha_dest * (1 - alpha_source)), giving soft-edged erasing.
  */
 export class CanvasObjectSoftBrushLine extends CanvasModuleBase {
   readonly type = 'object_soft_brush_line';
@@ -82,6 +89,11 @@ export class CanvasObjectSoftBrushLine extends CanvasModuleBase {
   /** Whether the stroke has been rasterized to a Konva.Image (after commit) */
   private _rasterized = false;
 
+  /** Whether this instance is rendering in eraser mode (destination-out compositing) */
+  private get _isEraseMode(): boolean {
+    return this.state.type === 'soft_eraser_line' || this.state.type === 'soft_eraser_line_with_pressure';
+  }
+
   constructor(state: SoftBrushState, parent: CanvasEntityObjectRenderer | CanvasEntityBufferObjectRenderer) {
     super();
     const { id, clip, opacity } = state;
@@ -104,7 +116,10 @@ export class CanvasObjectSoftBrushLine extends CanvasModuleBase {
         name: `${this.type}:shape`,
         listening: false,
         perfectDrawEnabled: false,
-        globalCompositeOperation: 'source-over',
+        globalCompositeOperation:
+          state.type === 'soft_eraser_line' || state.type === 'soft_eraser_line_with_pressure'
+            ? 'destination-out'
+            : 'source-over',
         sceneFunc: (ctx) => this._sceneFunc(ctx),
       }),
     };
@@ -193,8 +208,10 @@ export class CanvasObjectSoftBrushLine extends CanvasModuleBase {
     this._maskHeight = height;
     this._maskBuffer = new Uint8Array(width * height);
 
-    // Create ImageData with RGB pre-filled to brush color, alpha = 0
-    const { r, g, b } = this.state.color;
+    // Create ImageData with RGB pre-filled (brush color or white for eraser), alpha = 0
+    const { r, g, b } = this._isEraseMode
+      ? { r: 255, g: 255, b: 255 }
+      : (this.state as CanvasSoftBrushLineState | CanvasSoftBrushLineWithPressureState).color;
     if (this._strokeCtx) {
       this._imageData = this._strokeCtx.createImageData(width, height);
       const data = this._imageData.data;
@@ -409,7 +426,9 @@ export class CanvasObjectSoftBrushLine extends CanvasModuleBase {
     }
 
     const { points } = this.state;
-    const isPressure = this.state.type === 'soft_brush_line_with_pressure';
+    const isPressure =
+      this.state.type === 'soft_brush_line_with_pressure' ||
+      this.state.type === 'soft_eraser_line_with_pressure';
     const step = isPressure ? 3 : 2;
 
     if (points.length < step) {
@@ -511,6 +530,7 @@ export class CanvasObjectSoftBrushLine extends CanvasModuleBase {
       y: this._strokeOffsetY,
       listening: false,
       perfectDrawEnabled: false,
+      globalCompositeOperation: this._isEraseMode ? 'destination-out' : undefined,
     });
 
     // Remove the custom Shape and add the Image to the group
@@ -551,7 +571,10 @@ export class CanvasObjectSoftBrushLine extends CanvasModuleBase {
 
       // Invalidate dab profile if size or hardness changed; invalidate on color change too
       // since ImageData RGB needs to be re-filled
-      const colorKey = `${state.color.r},${state.color.g},${state.color.b}`;
+      const isErase = this._isEraseMode;
+      const colorKey = isErase
+        ? '255,255,255'
+        : `${(state as CanvasSoftBrushLineState | CanvasSoftBrushLineWithPressureState).color.r},${(state as CanvasSoftBrushLineState | CanvasSoftBrushLineWithPressureState).color.g},${(state as CanvasSoftBrushLineState | CanvasSoftBrushLineWithPressureState).color.b}`;
       if (state.strokeWidth !== this._dabSize || state.hardness !== this._dabHardness) {
         this._dabProfile = null;
         // Dab changed — need to re-render entire stroke with new profile

@@ -1614,7 +1614,10 @@ const slice = createSlice({
       entity.objects.push({
         ...eraserLine,
         // If the brush line is not pressure sensitive, we simplify the points to reduce the size of the state
-        points: eraserLine.type === 'eraser_line' ? simplifyFlatNumbersArray(eraserLine.points) : eraserLine.points,
+        points:
+          eraserLine.type === 'eraser_line' || eraserLine.type === 'soft_eraser_line'
+            ? simplifyFlatNumbersArray(eraserLine.points)
+            : eraserLine.points,
       });
     },
     entityRectAdded: (state, action: PayloadAction<EntityRectAddedPayload>) => {

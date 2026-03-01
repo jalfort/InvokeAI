@@ -338,6 +338,28 @@ const zCanvasEraserLineWithPressureState = z.object({
 });
 export type CanvasEraserLineWithPressureState = z.infer<typeof zCanvasEraserLineWithPressureState>;
 
+const zCanvasSoftEraserLineState = z.object({
+  id: zId,
+  type: z.literal('soft_eraser_line'),
+  strokeWidth: z.number().min(1),
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  points: zPoints,
+  clip: zRect.nullable(),
+});
+export type CanvasSoftEraserLineState = z.infer<typeof zCanvasSoftEraserLineState>;
+
+const zCanvasSoftEraserLineWithPressureState = z.object({
+  id: zId,
+  type: z.literal('soft_eraser_line_with_pressure'),
+  strokeWidth: z.number().min(1),
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  points: zPointsWithPressure,
+  clip: zRect.nullable(),
+});
+export type CanvasSoftEraserLineWithPressureState = z.infer<typeof zCanvasSoftEraserLineWithPressureState>;
+
 const zCanvasRectState = z.object({
   id: zId,
   type: z.literal('rect'),
@@ -400,6 +422,8 @@ const zCanvasObjectState = z.union([
   zCanvasCloneBrushLineWithPressureState,
   zCanvasEraserLineState,
   zCanvasEraserLineWithPressureState,
+  zCanvasSoftEraserLineState,
+  zCanvasSoftEraserLineWithPressureState,
   zCanvasRectState,
   zCanvasGradientState,
 ]);
@@ -1093,7 +1117,11 @@ export type EntityBrushLineAddedPayload = EntityIdentifierPayload<{
     | CanvasCloneBrushLineWithPressureState;
 }>;
 export type EntityEraserLineAddedPayload = EntityIdentifierPayload<{
-  eraserLine: CanvasEraserLineState | CanvasEraserLineWithPressureState;
+  eraserLine:
+    | CanvasEraserLineState
+    | CanvasEraserLineWithPressureState
+    | CanvasSoftEraserLineState
+    | CanvasSoftEraserLineWithPressureState;
 }>;
 export type EntityRectAddedPayload = EntityIdentifierPayload<{ rect: CanvasRectState }>;
 export type EntityGradientAddedPayload = EntityIdentifierPayload<{ gradient: CanvasGradientState }>;

@@ -5,12 +5,12 @@ import { useToolIsSelected } from 'features/controlLayers/components/Tool/hooks'
 import { ToolAnnotateSettings } from 'features/controlLayers/components/Tool/ToolAnnotateSettings';
 import { ToolBrushSettings } from 'features/controlLayers/components/Tool/ToolBrushSettings';
 import { ToolCloneBrushSettings } from 'features/controlLayers/components/Tool/ToolCloneBrushSettings';
+import { ToolEraserSettings } from 'features/controlLayers/components/Tool/ToolEraserSettings';
 import { ToolFillColorPicker } from 'features/controlLayers/components/Tool/ToolFillColorPicker';
 import { ToolGradientClipToggle } from 'features/controlLayers/components/Tool/ToolGradientClipToggle';
 import { ToolGradientModeToggle } from 'features/controlLayers/components/Tool/ToolGradientModeToggle';
 import { ToolOptionsRowContainer } from 'features/controlLayers/components/Tool/ToolOptionsRowContainer';
 import { ToolSelectionSettings } from 'features/controlLayers/components/Tool/ToolSelectionSettings';
-import { ToolWidthPicker } from 'features/controlLayers/components/Tool/ToolWidthPicker';
 import { CanvasToolbarFitBboxToLayersButton } from 'features/controlLayers/components/Toolbar/CanvasToolbarFitBboxToLayersButton';
 import { CanvasToolbarFitBboxToMasksButton } from 'features/controlLayers/components/Toolbar/CanvasToolbarFitBboxToMasksButton';
 import { CanvasToolbarNewSessionMenuButton } from 'features/controlLayers/components/Toolbar/CanvasToolbarNewSessionMenuButton';
@@ -64,7 +64,7 @@ export const CanvasToolbar = memo(() => {
         {isTextSelected && <TextToolOptions />}
         {isBrushSelected && <ToolBrushSettings />}
         {isCloneBrushSelected && <ToolCloneBrushSettings />}
-        {isEraserSelected && <ToolWidthPicker />}
+        {isEraserSelected && <ToolEraserSettings />}
         {isSelectionSelected && <ToolSelectionSettings />}
         {isAnnotateSelected && <ToolAnnotateSettings />}
       </ToolOptionsRowContainer>

@@ -128,7 +128,12 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
       }
 
       didRender = this.renderer.update(this.state, true);
-    } else if (this.state.type === 'soft_brush_line' || this.state.type === 'soft_brush_line_with_pressure') {
+    } else if (
+      this.state.type === 'soft_brush_line' ||
+      this.state.type === 'soft_brush_line_with_pressure' ||
+      this.state.type === 'soft_eraser_line' ||
+      this.state.type === 'soft_eraser_line_with_pressure'
+    ) {
       assert(this.renderer instanceof CanvasObjectSoftBrushLine || !this.renderer);
 
       if (!this.renderer) {
@@ -275,6 +280,8 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
           break;
         case 'eraser_line':
         case 'eraser_line_with_pressure':
+        case 'soft_eraser_line':
+        case 'soft_eraser_line_with_pressure':
           this.manager.stateApi.addEraserLine({ entityIdentifier, eraserLine: this.state });
           break;
         case 'rect':

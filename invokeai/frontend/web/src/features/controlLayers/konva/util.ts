@@ -630,7 +630,11 @@ export const exhaustiveCheck = (value: never): never => {
 
 export const getLastPointOfLastLineWithPressure = (
   objects: CanvasObjectState[],
-  type: 'brush_line_with_pressure' | 'eraser_line_with_pressure' | 'soft_brush_line_with_pressure'
+  type:
+    | 'brush_line_with_pressure'
+    | 'eraser_line_with_pressure'
+    | 'soft_brush_line_with_pressure'
+    | 'soft_eraser_line_with_pressure'
 ): CoordinateWithPressure | null => {
   const lastObject = objects.at(-1);
   if (!lastObject) {
@@ -646,7 +650,7 @@ export const getLastPointOfLastLineWithPressure = (
 
 export const getLastPointOfLastLine = (
   objects: CanvasObjectState[],
-  type: 'brush_line' | 'eraser_line' | 'soft_brush_line'
+  type: 'brush_line' | 'eraser_line' | 'soft_brush_line' | 'soft_eraser_line'
 ): Coordinate | null => {
   const lastObject = objects.at(-1);
   if (!lastObject) {
