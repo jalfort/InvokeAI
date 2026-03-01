@@ -17,8 +17,8 @@ logger = logging.getLogger("InvokeAI")
 DEFAULT_MODELS: dict[str, str] = {
     "gemini": "gemini-2.0-flash",
     "openai": "gpt-4o-mini",
-    "anthropic": "claude-haiku-4-5-20251001",
-    "openrouter": "anthropic/claude-3.5-haiku",
+    "anthropic": "claude-sonnet-4-6-20250514",
+    "openrouter": "anthropic/claude-sonnet-4-6-20250514",
 }
 
 # Providers that support text completion
