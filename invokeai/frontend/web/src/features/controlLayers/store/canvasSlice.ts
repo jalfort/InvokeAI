@@ -1221,7 +1221,9 @@ const slice = createSlice({
     },
     annotationObjectUpdated: (
       state,
-      action: PayloadAction<EntityIdentifierPayload<{ objectId: string; changes: Partial<AnnotationObject> }, 'annotation_layer'>>
+      action: PayloadAction<
+        EntityIdentifierPayload<{ objectId: string; changes: Partial<AnnotationObject> }, 'annotation_layer'>
+      >
     ) => {
       const { entityIdentifier, objectId, changes } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
@@ -1597,7 +1599,9 @@ const slice = createSlice({
         ...brushLine,
         // If the brush line is not pressure sensitive, we simplify the points to reduce the size of the state
         points:
-          brushLine.type === 'brush_line' || brushLine.type === 'soft_brush_line' || brushLine.type === 'clone_brush_line'
+          brushLine.type === 'brush_line' ||
+          brushLine.type === 'soft_brush_line' ||
+          brushLine.type === 'clone_brush_line'
             ? simplifyFlatNumbersArray(brushLine.points)
             : brushLine.points,
       });
@@ -1977,7 +1981,7 @@ export const {
   annotationObjectAdded,
   annotationObjectRemoved,
   annotationObjectUpdated,
-  annotationLayerReset,
+  // annotationLayerReset, // @knipignore - not yet wired up
 } = slice.actions;
 
 const syncScaledSize = (state: CanvasState) => {

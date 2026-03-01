@@ -427,8 +427,7 @@ export class CanvasObjectSoftBrushLine extends CanvasModuleBase {
 
     const { points } = this.state;
     const isPressure =
-      this.state.type === 'soft_brush_line_with_pressure' ||
-      this.state.type === 'soft_eraser_line_with_pressure';
+      this.state.type === 'soft_brush_line_with_pressure' || this.state.type === 'soft_eraser_line_with_pressure';
     const step = isPressure ? 3 : 2;
 
     if (points.length < step) {

@@ -144,7 +144,9 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
   /**
    * Finds the annotation object data by ID across all annotation layers.
    */
-  private findAnnotationObject = (objectId: string): { adapter: CanvasEntityAdapterAnnotationLayer; obj: AnnotationObject } | null => {
+  private findAnnotationObject = (
+    objectId: string
+  ): { adapter: CanvasEntityAdapterAnnotationLayer; obj: AnnotationObject } | null => {
     for (const adapter of this.manager.adapters.annotationLayers.values()) {
       const obj = adapter.state.objects.find((o) => o.id === objectId);
       if (obj) {
@@ -484,8 +486,8 @@ export class CanvasAnnotationToolModule extends CanvasModuleBase {
       const pointerPosition = stage.getPointerPosition();
       if (pointerPosition) {
         // Check if clicking on the transformer's anchors first (let it handle resize)
-        const clickedOnTransformer = _e.target?.getParent()?.className === 'Transformer' ||
-          _e.target?.className === 'Transformer';
+        const clickedOnTransformer =
+          _e.target?.getParent()?.className === 'Transformer' || _e.target?.className === 'Transformer';
         if (clickedOnTransformer) {
           this.isDraggingSelection = true;
           return;

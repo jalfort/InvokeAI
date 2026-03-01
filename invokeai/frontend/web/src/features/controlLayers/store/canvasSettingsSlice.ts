@@ -398,13 +398,19 @@ const slice = createSlice({
     settingsAnnotationModeChanged: (state, action: PayloadAction<CanvasSettingsState['annotationMode']>) => {
       state.annotationMode = action.payload;
     },
-    settingsAnnotationStrokeWidthChanged: (state, action: PayloadAction<CanvasSettingsState['annotationStrokeWidth']>) => {
+    settingsAnnotationStrokeWidthChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['annotationStrokeWidth']>
+    ) => {
       state.annotationStrokeWidth = action.payload;
     },
     settingsAnnotationFontSizeChanged: (state, action: PayloadAction<CanvasSettingsState['annotationFontSize']>) => {
       state.annotationFontSize = action.payload;
     },
-    settingsAnnotationFontFamilyChanged: (state, action: PayloadAction<CanvasSettingsState['annotationFontFamily']>) => {
+    settingsAnnotationFontFamilyChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['annotationFontFamily']>
+    ) => {
       state.annotationFontFamily = action.payload;
     },
     settingsAnnotationFontStyleChanged: (state, action: PayloadAction<CanvasSettingsState['annotationFontStyle']>) => {
@@ -461,7 +467,7 @@ export const {
   settingsAnnotationModeChanged,
   settingsAnnotationStrokeWidthChanged,
   settingsAnnotationFontSizeChanged,
-  settingsAnnotationFontFamilyChanged,
+  // settingsAnnotationFontFamilyChanged, // @knipignore - not yet wired up
   settingsAnnotationFontStyleChanged,
   settingsAnnotationTextBgEnabledToggled,
   settingsAnnotationTextBgColorChanged,
@@ -526,5 +532,7 @@ export const selectAnnotationStrokeWidth = createCanvasSettingsSelector((setting
 export const selectAnnotationFontSize = createCanvasSettingsSelector((settings) => settings.annotationFontSize);
 export const selectAnnotationFontFamily = createCanvasSettingsSelector((settings) => settings.annotationFontFamily);
 export const selectAnnotationFontStyle = createCanvasSettingsSelector((settings) => settings.annotationFontStyle);
-export const selectAnnotationTextBgEnabled = createCanvasSettingsSelector((settings) => settings.annotationTextBgEnabled);
+export const selectAnnotationTextBgEnabled = createCanvasSettingsSelector(
+  (settings) => settings.annotationTextBgEnabled
+);
 export const selectAnnotationTextBgColor = createCanvasSettingsSelector((settings) => settings.annotationTextBgColor);

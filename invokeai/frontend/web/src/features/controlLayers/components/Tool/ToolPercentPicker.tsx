@@ -182,73 +182,46 @@ interface ToolPercentPickerProps {
   defaultValue?: number;
 }
 
-export const ToolPercentPicker = memo(({ value, onChange, min = 0, defaultValue = DEFAULT_PERCENT }: ToolPercentPickerProps) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const [localValue, setLocalValue] = useState(value);
-  const [componentType, setComponentType] = useState<'slider' | 'dropdown' | null>(null);
-  const isTypingRef = useRef(false);
-  const inputPollRef = useRef<number | null>(null);
+export const ToolPercentPicker = memo(
+  ({ value, onChange, min = 0, defaultValue = DEFAULT_PERCENT }: ToolPercentPickerProps) => {
+    const ref = useRef<HTMLDivElement>(null);
+    const [localValue, setLocalValue] = useState(value);
+    const [componentType, setComponentType] = useState<'slider' | 'dropdown' | null>(null);
+    const isTypingRef = useRef(false);
+    const inputPollRef = useRef<number | null>(null);
 
-  const marks = useMemo(() => [min, 50, 100], [min]);
+    const marks = useMemo(() => [min, 50, 100], [min]);
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) {
-      return;
-    }
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect.width > SLIDER_VS_DROPDOWN_CONTAINER_WIDTH_THRESHOLD) {
-          setComponentType('slider');
-        } else {
-          setComponentType('dropdown');
+    useEffect(() => {
+      const el = ref.current;
+      if (!el) {
+        return;
+      }
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect.width > SLIDER_VS_DROPDOWN_CONTAINER_WIDTH_THRESHOLD) {
+            setComponentType('slider');
+          } else {
+            setComponentType('dropdown');
+          }
         }
-      }
-    });
-    observer.observe(el);
+      });
+      observer.observe(el);
 
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
+      return () => {
+        observer.disconnect();
+      };
+    }, []);
 
-  const onClampedChange = useCallback(
-    (v: number) => {
-      onChange(clamp(Math.round(v), min, 100));
-    },
-    [onChange, min]
-  );
+    const onClampedChange = useCallback(
+      (v: number) => {
+        onChange(clamp(Math.round(v), min, 100));
+      },
+      [onChange, min]
+    );
 
-  const syncFromInputElement = useCallback(
-    (input: HTMLInputElement | null) => {
-      if (!input) {
-        return;
-      }
-      const parsed = parseInputValue(input.value);
-      if (Number.isNaN(parsed)) {
-        return;
-      }
-      setLocalValue(parsed);
-      onClampedChange(parsed);
-    },
-    [onClampedChange]
-  );
-
-  const stopPollingInput = useCallback(() => {
-    if (inputPollRef.current !== null) {
-      window.clearInterval(inputPollRef.current);
-      inputPollRef.current = null;
-    }
-  }, []);
-
-  const startPollingInput = useCallback(
-    (container: HTMLElement | null) => {
-      stopPollingInput();
-      if (!container) {
-        return;
-      }
-      inputPollRef.current = window.setInterval(() => {
-        const input = container.querySelector('input');
+    const syncFromInputElement = useCallback(
+      (input: HTMLInputElement | null) => {
         if (!input) {
           return;
         }
@@ -257,135 +230,174 @@ export const ToolPercentPicker = memo(({ value, onChange, min = 0, defaultValue 
           return;
         }
         setLocalValue(parsed);
-        if (!isTypingRef.current) {
-          onClampedChange(parsed);
+        onClampedChange(parsed);
+      },
+      [onClampedChange]
+    );
+
+    const stopPollingInput = useCallback(() => {
+      if (inputPollRef.current !== null) {
+        window.clearInterval(inputPollRef.current);
+        inputPollRef.current = null;
+      }
+    }, []);
+
+    const startPollingInput = useCallback(
+      (container: HTMLElement | null) => {
+        stopPollingInput();
+        if (!container) {
+          return;
         }
-      }, 50);
-    },
-    [onClampedChange, stopPollingInput]
-  );
+        inputPollRef.current = window.setInterval(() => {
+          const input = container.querySelector('input');
+          if (!input) {
+            return;
+          }
+          const parsed = parseInputValue(input.value);
+          if (Number.isNaN(parsed)) {
+            return;
+          }
+          setLocalValue(parsed);
+          if (!isTypingRef.current) {
+            onClampedChange(parsed);
+          }
+        }, 50);
+      },
+      [onClampedChange, stopPollingInput]
+    );
 
-  const commitValue = useCallback(
-    (v: number) => {
-      if (isNaN(Number(v))) {
-        onClampedChange(defaultValue);
-        setLocalValue(defaultValue);
-      } else {
+    const commitValue = useCallback(
+      (v: number) => {
+        if (isNaN(Number(v))) {
+          onClampedChange(defaultValue);
+          setLocalValue(defaultValue);
+        } else {
+          onClampedChange(v);
+          setLocalValue(v);
+        }
+      },
+      [onClampedChange, defaultValue]
+    );
+
+    const onChangeSlider = useCallback(
+      (v: number) => {
         onClampedChange(v);
+      },
+      [onClampedChange]
+    );
+
+    const onChangeInput = useCallback(
+      (v: number) => {
         setLocalValue(v);
-      }
-    },
-    [onClampedChange, defaultValue]
-  );
+        if (!isNaN(v) && !isTypingRef.current) {
+          onClampedChange(v);
+        }
+      },
+      [onClampedChange]
+    );
 
-  const onChangeSlider = useCallback(
-    (v: number) => {
-      onClampedChange(v);
-    },
-    [onClampedChange]
-  );
-
-  const onChangeInput = useCallback(
-    (v: number) => {
-      setLocalValue(v);
-      if (!isNaN(v) && !isTypingRef.current) {
-        onClampedChange(v);
-      }
-    },
-    [onClampedChange]
-  );
-
-  const onBlur = useCallback(
-    (event?: FocusEvent<HTMLElement>) => {
-      const { parsed } = getInputValueFromEvent(event);
-      commitValue(Number.isNaN(parsed) ? localValue : parsed);
-      isTypingRef.current = false;
-    },
-    [commitValue, localValue]
-  );
-
-  const onKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        const { parsed } = getInputValueFromEvent(e);
+    const onBlur = useCallback(
+      (event?: FocusEvent<HTMLElement>) => {
+        const { parsed } = getInputValueFromEvent(event);
         commitValue(Number.isNaN(parsed) ? localValue : parsed);
         isTypingRef.current = false;
-        return;
-      }
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      },
+      [commitValue, localValue]
+    );
+
+    const onKeyDown = useCallback(
+      (e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+          const { parsed } = getInputValueFromEvent(e);
+          commitValue(Number.isNaN(parsed) ? localValue : parsed);
+          isTypingRef.current = false;
+          return;
+        }
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          isTypingRef.current = false;
+          const { input } = getInputValueFromEvent(e);
+          window.requestAnimationFrame(() => {
+            syncFromInputElement(input);
+          });
+          return;
+        }
+        if (e.key === 'Backspace' || e.key === 'Delete' || e.key.length === 1) {
+          isTypingRef.current = true;
+        }
+      },
+      [commitValue, localValue, syncFromInputElement]
+    );
+
+    const onPointerDownCapture = useCallback(
+      (_e: PointerEvent<HTMLDivElement>) => {
         isTypingRef.current = false;
-        const { input } = getInputValueFromEvent(e);
-        window.requestAnimationFrame(() => {
-          syncFromInputElement(input);
-        });
-        return;
-      }
-      if (e.key === 'Backspace' || e.key === 'Delete' || e.key.length === 1) {
-        isTypingRef.current = true;
-      }
-    },
-    [commitValue, localValue, syncFromInputElement]
-  );
+        const target = _e.target as HTMLElement | null;
+        if (target && target.tagName !== 'INPUT') {
+          startPollingInput(_e.currentTarget);
+        } else {
+          stopPollingInput();
+        }
+      },
+      [startPollingInput, stopPollingInput]
+    );
 
-  const onPointerDownCapture = useCallback(
-    (_e: PointerEvent<HTMLDivElement>) => {
-      isTypingRef.current = false;
-      const target = _e.target as HTMLElement | null;
-      if (target && target.tagName !== 'INPUT') {
-        startPollingInput(_e.currentTarget);
-      } else {
-        stopPollingInput();
-      }
-    },
-    [startPollingInput, stopPollingInput]
-  );
-
-  const onPointerUpCapture = useCallback(() => {
-    stopPollingInput();
-  }, [stopPollingInput]);
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  useEffect(() => {
-    return () => {
+    const onPointerUpCapture = useCallback(() => {
       stopPollingInput();
-    };
-  }, [stopPollingInput]);
+    }, [stopPollingInput]);
 
-  return (
-    <Flex ref={ref} alignItems="center" h="full" flexGrow={0} flexShrink={1} flexBasis="320px" minW="280px" justifyContent="flex-start" px={4}>
-      {componentType === 'slider' && (
-        <SliderPercentPickerComponent
-          localValue={localValue}
-          min={min}
-          defaultValue={defaultValue}
-          marks={marks}
-          onChangeSlider={onChangeSlider}
-          onChangeInput={onChangeInput}
-          onBlur={onBlur}
-          onKeyDown={onKeyDown}
-          onPointerDownCapture={onPointerDownCapture}
-          onPointerUpCapture={onPointerUpCapture}
-        />
-      )}
-      {componentType === 'dropdown' && (
-        <DropDownPercentPickerComponent
-          localValue={localValue}
-          min={min}
-          defaultValue={defaultValue}
-          marks={marks}
-          onChangeSlider={onChangeSlider}
-          onChangeInput={onChangeInput}
-          onBlur={onBlur}
-          onKeyDown={onKeyDown}
-          onPointerDownCapture={onPointerDownCapture}
-          onPointerUpCapture={onPointerUpCapture}
-        />
-      )}
-    </Flex>
-  );
-});
+    useEffect(() => {
+      setLocalValue(value);
+    }, [value]);
+
+    useEffect(() => {
+      return () => {
+        stopPollingInput();
+      };
+    }, [stopPollingInput]);
+
+    return (
+      <Flex
+        ref={ref}
+        alignItems="center"
+        h="full"
+        flexGrow={0}
+        flexShrink={1}
+        flexBasis="320px"
+        minW="280px"
+        justifyContent="flex-start"
+        px={4}
+      >
+        {componentType === 'slider' && (
+          <SliderPercentPickerComponent
+            localValue={localValue}
+            min={min}
+            defaultValue={defaultValue}
+            marks={marks}
+            onChangeSlider={onChangeSlider}
+            onChangeInput={onChangeInput}
+            onBlur={onBlur}
+            onKeyDown={onKeyDown}
+            onPointerDownCapture={onPointerDownCapture}
+            onPointerUpCapture={onPointerUpCapture}
+          />
+        )}
+        {componentType === 'dropdown' && (
+          <DropDownPercentPickerComponent
+            localValue={localValue}
+            min={min}
+            defaultValue={defaultValue}
+            marks={marks}
+            onChangeSlider={onChangeSlider}
+            onChangeInput={onChangeInput}
+            onBlur={onBlur}
+            onKeyDown={onKeyDown}
+            onPointerDownCapture={onPointerDownCapture}
+            onPointerUpCapture={onPointerUpCapture}
+          />
+        )}
+      </Flex>
+    );
+  }
+);
 
 ToolPercentPicker.displayName = 'ToolPercentPicker';

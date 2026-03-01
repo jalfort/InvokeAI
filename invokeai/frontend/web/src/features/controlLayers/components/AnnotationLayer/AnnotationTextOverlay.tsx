@@ -20,11 +20,7 @@ import {
 import type { RgbaColor } from 'features/controlLayers/store/types';
 import type { ChangeEvent, FocusEvent, KeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import {
-  PiHighlighterCircleBold,
-  PiTextBBold,
-  PiTextItalicBold,
-} from 'react-icons/pi';
+import { PiHighlighterCircleBold, PiTextBBold, PiTextItalicBold } from 'react-icons/pi';
 
 // Local selector for the active fill color (same pattern as ToolFillColorPicker)
 const selectActiveColor = createSelector(selectCanvasSettingsSlice, (settings) =>
@@ -144,7 +140,8 @@ export const AnnotationTextOverlay = memo(() => {
       const next = current.replace('italic', '').trim() as CanvasSettingsState['annotationFontStyle'];
       dispatch(settingsAnnotationFontStyleChanged(next || 'normal'));
     } else {
-      const next = current === 'normal' ? 'italic' : (`${current} italic` as CanvasSettingsState['annotationFontStyle']);
+      const next =
+        current === 'normal' ? 'italic' : (`${current} italic` as CanvasSettingsState['annotationFontStyle']);
       dispatch(settingsAnnotationFontStyleChanged(next));
     }
   }, [dispatch, fontStyle]);

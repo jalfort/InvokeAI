@@ -100,7 +100,12 @@ export class CanvasEraserToolModule extends CanvasModuleBase {
         perfectDrawEnabled: false,
       }),
     };
-    this.konva.group.add(this.konva.fillCircle, this.konva.cutoutCircle, this.konva.innerBorder, this.konva.outerBorder);
+    this.konva.group.add(
+      this.konva.fillCircle,
+      this.konva.cutoutCircle,
+      this.konva.innerBorder,
+      this.konva.outerBorder
+    );
   }
 
   syncCursorStyle = () => {
@@ -484,8 +489,7 @@ export class CanvasEraserToolModule extends CanvasModuleBase {
 
     // Add pressure if the pen is down and pressure sensitivity is enabled
     if (
-      (bufferState.type === 'eraser_line_with_pressure' ||
-        bufferState.type === 'soft_eraser_line_with_pressure') &&
+      (bufferState.type === 'eraser_line_with_pressure' || bufferState.type === 'soft_eraser_line_with_pressure') &&
       settings.pressureSensitivity
     ) {
       bufferState.points.push(e.evt.pressure);

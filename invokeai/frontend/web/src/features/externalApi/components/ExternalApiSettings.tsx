@@ -165,7 +165,14 @@ export const ExternalApiSettings = memo(() => {
     }
 
     // Build model entries with group keys and display labels
-    type ModelEntry = { id: string; name: string; providerId: string; providerLabel: string; groupKey: string; groupLabel: string };
+    type ModelEntry = {
+      id: string;
+      name: string;
+      providerId: string;
+      providerLabel: string;
+      groupKey: string;
+      groupLabel: string;
+    };
     const entries: ModelEntry[] = [];
     for (const model of modelsData.models) {
       const providerInfo = providersData?.providers.find((p) => p.provider === model.provider_id);
@@ -186,7 +193,14 @@ export const ExternalApiSettings = memo(() => {
         groupLabel = providerLabel;
       }
 
-      entries.push({ id: model.id, name: model.name, providerId: model.provider_id, providerLabel, groupKey, groupLabel });
+      entries.push({
+        id: model.id,
+        name: model.name,
+        providerId: model.provider_id,
+        providerLabel,
+        groupKey,
+        groupLabel,
+      });
     }
 
     // Group entries
@@ -281,10 +295,7 @@ export const ExternalApiSettings = memo(() => {
     () => OUTPUT_FORMAT_OPTIONS.find((o) => o.value === outputFormat) ?? null,
     [outputFormat]
   );
-  const sortValue = useMemo(
-    () => SORT_OPTIONS.find((o) => o.value === sortBy) ?? SORT_OPTIONS[0]!,
-    [sortBy]
-  );
+  const sortValue = useMemo(() => SORT_OPTIONS.find((o) => o.value === sortBy) ?? SORT_OPTIONS[0]!, [sortBy]);
 
   const onModelChange = useCallback<ComboboxOnChange>(
     (v) => {

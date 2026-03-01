@@ -231,7 +231,14 @@ export const ToolSelectionSettings = memo(() => {
           <Flex role="button" aria-label="Selection overlay color" tabIndex={-1} w={8} h={8}>
             <Tooltip label="Overlay Color">
               <Flex w="full" h="full" alignItems="center" justifyContent="center">
-                <Box borderRadius="full" borderColor="base.600" w={6} h={6} borderWidth={2} bg={rgbColorToString(overlayColor)} />
+                <Box
+                  borderRadius="full"
+                  borderColor="base.600"
+                  w={6}
+                  h={6}
+                  borderWidth={2}
+                  bg={rgbColorToString(overlayColor)}
+                />
               </Flex>
             </Tooltip>
           </Flex>

@@ -18,6 +18,9 @@ const config: KnipConfig = {
     // Auth features - exports will be used in follow-up phases
     'src/features/auth/**',
     'src/services/api/endpoints/auth.ts',
+    // Upstream IPAdapter menu files - not yet wired up after refactor
+    'src/features/controlLayers/components/RefImage/IPAdapterMenuItemPullBbox.tsx',
+    'src/features/controlLayers/components/RefImage/IPAdapterMenuItems.tsx',
   ],
   ignoreBinaries: ['only-allow'],
   ignoreDependencies: ['magic-string'],

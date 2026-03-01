@@ -31,7 +31,7 @@ const zExternalApiGenerationMode = z.enum(['generate', 'edit']);
 export type ExternalApiGenerationMode = z.infer<typeof zExternalApiGenerationMode>;
 
 const zExternalApiModeSource = z.enum(['user', 'auto']);
-export type ExternalApiModeSource = z.infer<typeof zExternalApiModeSource>;
+// ExternalApiModeSource type inferred via state schema
 
 const zExternalApiSortBy = z.enum(['provider', 'api_category', 'user_category']);
 export type ExternalApiSortBy = z.infer<typeof zExternalApiSortBy>;
@@ -172,17 +172,17 @@ export const {
   externalApiResolutionChanged,
   externalApiWebSearchToggled,
   externalApiSafetyToleranceChanged,
-  externalApiNumImagesChanged,
+  // externalApiNumImagesChanged, // @knipignore - not yet wired up
   externalApiOutputFormatChanged,
   externalApiReferenceImageAdded,
   externalApiReferenceImageRemoved,
-  externalApiReferenceImagesCleared,
+  // externalApiReferenceImagesCleared, // knipignore - used via string dispatch
   externalApiDynamicParamChanged,
-  externalApiDynamicParamsReset,
+  // externalApiDynamicParamsReset, // @knipignore - not yet wired up
   externalApiDynamicImageAdded,
   externalApiDynamicImageRemoved,
   externalApiDynamicImageFieldCleared,
-  externalApiDynamicImageParamsReset,
+  // externalApiDynamicImageParamsReset, // @knipignore - not yet wired up
   externalApiSortByChanged,
 } = slice.actions;
 
@@ -258,7 +258,7 @@ export const selectExternalApiAspectRatio = createExternalApiSelector((s) => s.a
 export const selectExternalApiResolution = createExternalApiSelector((s) => s.resolution);
 export const selectExternalApiEnableWebSearch = createExternalApiSelector((s) => s.enableWebSearch);
 export const selectExternalApiSafetyTolerance = createExternalApiSelector((s) => s.safetyTolerance);
-export const selectExternalApiNumImages = createExternalApiSelector((s) => s.numImages);
+// export const selectExternalApiNumImages = createExternalApiSelector((s) => s.numImages); // @knipignore - not yet wired up
 export const selectExternalApiOutputFormat = createExternalApiSelector((s) => s.outputFormat);
 export const selectExternalApiModeSource = createExternalApiSelector((s) => s.modeSource);
 export const selectExternalApiReferenceImageNames = createExternalApiSelector((s) => s.referenceImageNames);

@@ -474,8 +474,7 @@ export class CanvasBrushToolModule extends CanvasModuleBase {
 
     // Add pressure if the pen is down and pressure sensitivity is enabled
     if (
-      (bufferState.type === 'brush_line_with_pressure' ||
-        bufferState.type === 'soft_brush_line_with_pressure') &&
+      (bufferState.type === 'brush_line_with_pressure' || bufferState.type === 'soft_brush_line_with_pressure') &&
       settings.pressureSensitivity
     ) {
       bufferState.points.push(e.evt.pressure);

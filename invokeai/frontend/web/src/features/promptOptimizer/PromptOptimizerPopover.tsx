@@ -101,7 +101,9 @@ export const PromptOptimizerPopover = memo(({ onAccept }: Props) => {
       return null;
     }
     if (activeSystemPromptId) {
-      return systemPromptsData.prompts.find((p) => p.id === activeSystemPromptId) ?? systemPromptsData.prompts[0] ?? null;
+      return (
+        systemPromptsData.prompts.find((p) => p.id === activeSystemPromptId) ?? systemPromptsData.prompts[0] ?? null
+      );
     }
     return systemPromptsData.prompts[0] ?? null;
   }, [systemPromptsData, activeSystemPromptId]);
@@ -128,7 +130,10 @@ export const PromptOptimizerPopover = memo(({ onAccept }: Props) => {
         system_prompt: systemPromptText,
         provider,
       }).unwrap();
-      setResults((prev) => [...prev, { text: result.optimized_prompt, provider: result.provider, model: result.model }]);
+      setResults((prev) => [
+        ...prev,
+        { text: result.optimized_prompt, provider: result.provider, model: result.model },
+      ]);
       setActiveTabIndex((prev) => prev + 1 || 0);
     } catch {
       // Error handled by RTK Query
@@ -260,13 +265,7 @@ export const PromptOptimizerPopover = memo(({ onAccept }: Props) => {
                       <Spinner size="md" />
                     </Flex>
                   ) : results.length > 0 ? (
-                    <Tabs
-                      variant="line"
-                      size="sm"
-                      isLazy
-                      index={activeTabIndex}
-                      onChange={setActiveTabIndex}
-                    >
+                    <Tabs variant="line" size="sm" isLazy index={activeTabIndex} onChange={setActiveTabIndex}>
                       <TabList>
                         {results.map((_, i) => (
                           <Tab key={i} fontSize="xs">

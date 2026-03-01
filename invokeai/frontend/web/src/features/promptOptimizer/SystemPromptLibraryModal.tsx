@@ -109,10 +109,7 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
 
   const prompts = useMemo(() => promptsData?.prompts ?? [], [promptsData]);
   const providers = useMemo(() => textProvidersData?.providers ?? [], [textProvidersData]);
-  const defaultSystemPrompt = useMemo(
-    () => prompts.find((p) => p.is_default)?.system_prompt ?? null,
-    [prompts]
-  );
+  const defaultSystemPrompt = useMemo(() => prompts.find((p) => p.is_default)?.system_prompt ?? null, [prompts]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -137,10 +134,7 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
     [providerOptions, refineProvider]
   );
 
-  const selectedPrompt = useMemo(
-    () => prompts.find((p) => p.id === selectedId) ?? null,
-    [prompts, selectedId]
-  );
+  const selectedPrompt = useMemo(() => prompts.find((p) => p.id === selectedId) ?? null, [prompts, selectedId]);
 
   const isLocked = selectedPrompt?.is_locked ?? false;
 
@@ -182,17 +176,14 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
     }
   }, [providers, refineProvider]);
 
-  const selectPrompt = useCallback(
-    (prompt: SystemPromptEntry) => {
-      setSelectedId(prompt.id);
-      setEditName(prompt.name);
-      setEditContent(prompt.system_prompt);
-      setIsDirty(false);
-      setRefineResults([]);
-      setRefineTabIndex(0);
-    },
-    []
-  );
+  const selectPrompt = useCallback((prompt: SystemPromptEntry) => {
+    setSelectedId(prompt.id);
+    setEditName(prompt.name);
+    setEditContent(prompt.system_prompt);
+    setIsDirty(false);
+    setRefineResults([]);
+    setRefineTabIndex(0);
+  }, []);
 
   const onNameChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setEditName(e.target.value);
@@ -280,7 +271,15 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
     } catch {
       // Handled by RTK Query
     }
-  }, [refineProvider, refineInstruction, editContent, sendCurrentPrompt, defaultSystemPrompt, refinePrompt, refineResults.length]);
+  }, [
+    refineProvider,
+    refineInstruction,
+    editContent,
+    sendCurrentPrompt,
+    defaultSystemPrompt,
+    refinePrompt,
+    refineResults.length,
+  ]);
 
   const replaceCurrentPrompt = useCallback(() => {
     const result = refineResults[refineTabIndex];
@@ -379,12 +378,7 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
 
                 {/* Action buttons */}
                 <Flex gap={2} alignItems="center">
-                  <Button
-                    size="sm"
-                    leftIcon={<PiFloppyDiskBold />}
-                    onClick={onSave}
-                    isDisabled={!isDirty || isLocked}
-                  >
+                  <Button size="sm" leftIcon={<PiFloppyDiskBold />} onClick={onSave} isDisabled={!isDirty || isLocked}>
                     {t('common.save')}
                   </Button>
                   <Button
@@ -524,12 +518,7 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
                       >
                         {t('promptOptimizer.replaceCurrent')}
                       </Button>
-                      <Button
-                        size="sm"
-                        leftIcon={<PiPlusBold />}
-                        onClick={saveAsNewPrompt}
-                        variant="outline"
-                      >
+                      <Button size="sm" leftIcon={<PiPlusBold />} onClick={saveAsNewPrompt} variant="outline">
                         {t('promptOptimizer.saveAsNew')}
                       </Button>
                       <Button

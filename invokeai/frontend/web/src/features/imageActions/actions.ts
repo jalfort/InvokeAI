@@ -85,7 +85,12 @@ export const createNewCanvasEntityFromImage = async (arg: {
   withResize?: boolean;
   dispatch: AppDispatch;
   getState: AppGetState;
-  overrides?: Partial<{ isEnabled: boolean; isLocked: boolean; name: string | null; position: { x: number; y: number } }>;
+  overrides?: Partial<{
+    isEnabled: boolean;
+    isLocked: boolean;
+    name: string | null;
+    position: { x: number; y: number };
+  }>;
 }) => {
   const { type, imageDTO, dispatch, getState, withResize, overrides: _overrides } = arg;
   const state = getState();

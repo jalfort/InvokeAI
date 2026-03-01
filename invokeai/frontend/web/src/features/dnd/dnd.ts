@@ -509,10 +509,7 @@ export type AddDynamicSchemaImageDndTargetData = DndData<
   typeof _addDynamicSchemaImage.key,
   { fieldKey: string }
 >;
-export const addDynamicSchemaImageDndTarget: DndTarget<
-  AddDynamicSchemaImageDndTargetData,
-  SingleImageDndSourceData
-> = {
+export const addDynamicSchemaImageDndTarget: DndTarget<AddDynamicSchemaImageDndTargetData, SingleImageDndSourceData> = {
   ..._addDynamicSchemaImage,
   typeGuard: buildTypeGuard(_addDynamicSchemaImage.key),
   getData: buildGetData(_addDynamicSchemaImage.key, _addDynamicSchemaImage.type),

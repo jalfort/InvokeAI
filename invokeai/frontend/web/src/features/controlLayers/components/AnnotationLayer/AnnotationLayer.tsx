@@ -4,7 +4,10 @@ import { CanvasEntityDeleteButton } from 'features/controlLayers/components/comm
 import { CanvasEntityEnabledToggle } from 'features/controlLayers/components/common/CanvasEntityEnabledToggle';
 import { CanvasEntityHeader } from 'features/controlLayers/components/common/CanvasEntityHeader';
 import { CanvasEntityStateGate } from 'features/controlLayers/contexts/CanvasEntityStateGate';
-import { EntityIdentifierContext, useEntityIdentifierContext } from 'features/controlLayers/contexts/EntityIdentifierContext';
+import {
+  EntityIdentifierContext,
+  useEntityIdentifierContext,
+} from 'features/controlLayers/contexts/EntityIdentifierContext';
 import { useEntityTitle } from 'features/controlLayers/hooks/useEntityTitle';
 import type { CanvasEntityIdentifier } from 'features/controlLayers/store/types';
 import { memo, useMemo } from 'react';

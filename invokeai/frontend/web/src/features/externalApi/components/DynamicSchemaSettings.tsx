@@ -178,7 +178,12 @@ function resolveRef(schema: JsonSchema, ref: string): SchemaProperty | null {
  * should already have their type/enum directly. This handles residual wrapping patterns.
  */
 function resolveProperty(schema: JsonSchema, prop: SchemaProperty): SchemaProperty {
-  const keepFields = { title: prop.title, description: prop.description, default: prop.default, 'x-order': prop['x-order'] };
+  const keepFields = {
+    title: prop.title,
+    description: prop.description,
+    default: prop.default,
+    'x-order': prop['x-order'],
+  };
 
   // Handle allOf — merge all items into one resolved property
   if (prop.allOf?.length) {
@@ -235,9 +240,7 @@ function filterDefined(obj: Record<string, unknown>): Record<string, unknown> {
 
 /** Format a key name into a readable label: "guidance_scale" → "Guidance Scale" */
 function formatLabel(key: string): string {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /** Get ordered property keys from the schema. */
@@ -608,13 +611,7 @@ const SingleColorField = memo(({ fieldKey, prop }: FieldProps) => {
           {hexValue.toUpperCase()}
         </Text>
         {currentValue && (
-          <IconButton
-            aria-label="Clear"
-            icon={<PiTrashSimpleBold />}
-            size="xs"
-            variant="ghost"
-            onClick={onClear}
-          />
+          <IconButton aria-label="Clear" icon={<PiTrashSimpleBold />} size="xs" variant="ghost" onClick={onClear} />
         )}
       </Flex>
     </FormControl>
@@ -626,10 +623,7 @@ SingleColorField.displayName = 'SingleColorField';
 const ColorArrayField = memo(({ fieldKey, prop }: FieldProps) => {
   const dispatch = useAppDispatch();
   const dynamicParams = useAppSelector(selectExternalApiDynamicParams);
-  const colors = useMemo(
-    () => (dynamicParams[fieldKey] as RgbColor[] | undefined) ?? [],
-    [dynamicParams, fieldKey]
-  );
+  const colors = useMemo(() => (dynamicParams[fieldKey] as RgbColor[] | undefined) ?? [], [dynamicParams, fieldKey]);
 
   const onAddColor = useCallback(() => {
     const newColors = [...colors, { r: 0, g: 0, b: 0 }];
@@ -658,13 +652,7 @@ const ColorArrayField = memo(({ fieldKey, prop }: FieldProps) => {
       <FormLabel>{prop.title ?? formatLabel(fieldKey)}</FormLabel>
       <Flex gap={2} flexWrap="wrap" alignItems="center">
         {colors.map((color, i) => (
-          <ColorSwatch
-            key={i}
-            color={color}
-            index={i}
-            onChange={onChangeColor}
-            onRemove={onRemoveColor}
-          />
+          <ColorSwatch key={i} color={color} index={i} onChange={onChangeColor} onRemove={onRemoveColor} />
         ))}
         <Box
           as="button"

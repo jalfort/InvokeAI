@@ -2,7 +2,7 @@ import type { Deferred } from 'common/util/createDeferredPromise';
 import { createDeferredPromise } from 'common/util/createDeferredPromise';
 import { atom } from 'nanostores';
 
-export type TransparencyFillChoice = 'white' | 'black';
+type TransparencyFillChoice = 'white' | 'black';
 
 /**
  * When non-null, the TransparencyFillDialog is open and awaiting user choice.

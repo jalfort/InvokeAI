@@ -197,7 +197,6 @@ export class CanvasSelectionToolModule extends CanvasModuleBase {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
 
-
     // Watch feather and overlay settings changes, re-apply to latest stack entry
     this.unsubscribeStore = this.manager.stateApi.store.subscribe(() => {
       const settings = this.manager.stateApi.getSettings();

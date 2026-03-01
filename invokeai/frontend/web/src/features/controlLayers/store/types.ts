@@ -272,7 +272,7 @@ const zCanvasSoftBrushLineWithPressureState = z.object({
 export type CanvasSoftBrushLineWithPressureState = z.infer<typeof zCanvasSoftBrushLineWithPressureState>;
 
 const _zCloneBrushSampleMode = z.enum(['current_layer', 'current_and_below']);
-export type CloneBrushSampleMode = z.infer<typeof _zCloneBrushSampleMode>;
+// CloneBrushSampleMode type inferred via CanvasSettingsState['cloneBrushSampleMode']
 
 const zCanvasCloneBrushLineState = z.object({
   id: zId,
@@ -703,14 +703,12 @@ const zAnnotationLineObject = zAnnotationObjectBase.extend({
   points: z.array(z.number()), // [x1, y1, x2, y2]
   strokeWidth: z.number(),
 });
-export type AnnotationLineObject = z.infer<typeof zAnnotationLineObject>;
 
 const zAnnotationArrowObject = zAnnotationObjectBase.extend({
   type: z.literal('annotation_arrow'),
   points: z.array(z.number()), // [x1, y1, x2, y2]
   strokeWidth: z.number(),
 });
-export type AnnotationArrowObject = z.infer<typeof zAnnotationArrowObject>;
 
 const zAnnotationTextObject = zAnnotationObjectBase.extend({
   type: z.literal('annotation_text'),
@@ -723,7 +721,6 @@ const zAnnotationTextObject = zAnnotationObjectBase.extend({
   backgroundEnabled: z.boolean().optional(),
   padding: z.number().optional(),
 });
-export type AnnotationTextObject = z.infer<typeof zAnnotationTextObject>;
 
 const zAnnotationRectObject = zAnnotationObjectBase.extend({
   type: z.literal('annotation_rect'),
@@ -732,7 +729,6 @@ const zAnnotationRectObject = zAnnotationObjectBase.extend({
   height: z.number(),
   strokeWidth: z.number(),
 });
-export type AnnotationRectObject = z.infer<typeof zAnnotationRectObject>;
 
 const zAnnotationEllipseObject = zAnnotationObjectBase.extend({
   type: z.literal('annotation_ellipse'),
@@ -741,7 +737,6 @@ const zAnnotationEllipseObject = zAnnotationObjectBase.extend({
   radiusY: z.number(),
   strokeWidth: z.number(),
 });
-export type AnnotationEllipseObject = z.infer<typeof zAnnotationEllipseObject>;
 
 const zAnnotationObject = z.discriminatedUnion('type', [
   zAnnotationLineObject,
@@ -1172,11 +1167,7 @@ export function isRegionalGuidanceEntityIdentifier(
   return entityIdentifier.type === 'regional_guidance';
 }
 
-export function isAnnotationLayerEntityIdentifier(
-  entityIdentifier: CanvasEntityIdentifier
-): entityIdentifier is CanvasEntityIdentifier<'annotation_layer'> {
-  return entityIdentifier.type === 'annotation_layer';
-}
+// isAnnotationLayerEntityIdentifier - available if needed via entityIdentifier.type === 'annotation_layer'
 
 export function isFilterableEntityIdentifier(
   entityIdentifier: CanvasEntityIdentifier

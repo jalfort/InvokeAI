@@ -200,9 +200,7 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
 
       case 'annotation_text': {
         const bgEnabled = obj.backgroundEnabled ?? false;
-        const bgColor = obj.backgroundColor
-          ? rgbaColorToString(obj.backgroundColor)
-          : 'rgba(0, 0, 0, 0.8)';
+        const bgColor = obj.backgroundColor ? rgbaColorToString(obj.backgroundColor) : 'rgba(0, 0, 0, 0.8)';
         const padding = obj.padding ?? 8;
 
         const label = new Konva.Label({
@@ -303,9 +301,7 @@ export class CanvasEntityAdapterAnnotationLayer extends CanvasModuleBase {
 
         const tag = label.getTag() as Konva.Tag;
         const bgEnabled = obj.backgroundEnabled ?? false;
-        const bgColor = obj.backgroundColor
-          ? rgbaColorToString(obj.backgroundColor)
-          : 'rgba(0, 0, 0, 0.8)';
+        const bgColor = obj.backgroundColor ? rgbaColorToString(obj.backgroundColor) : 'rgba(0, 0, 0, 0.8)';
         tag.fill(bgEnabled ? bgColor : 'transparent');
         break;
       }

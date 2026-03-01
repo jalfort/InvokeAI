@@ -181,7 +181,7 @@ type DeleteEndpointRequest = {
   id: string;
 };
 
-export const externalApiEndpoints = api.injectEndpoints({
+const externalApiEndpoints = api.injectEndpoints({
   endpoints: (build) => ({
     getExternalApiProviders: build.query<ProviderListResponse, void>({
       query: () => ({
@@ -348,8 +348,8 @@ export const {
   useRefineSystemPromptMutation,
   useGetDynamicEndpointsQuery,
   useAddDynamicEndpointMutation,
-  useRenameDynamicEndpointMutation,
-  useSetDynamicEndpointCategoryMutation,
+  // useRenameDynamicEndpointMutation, // @knipignore - not yet wired up
+  // useSetDynamicEndpointCategoryMutation, // @knipignore - not yet wired up
   useUpdateDynamicEndpointMutation,
   useRefreshDynamicEndpointMutation,
   useDeleteDynamicEndpointMutation,

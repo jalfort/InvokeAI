@@ -245,7 +245,13 @@ export function selectAllEntities(state: CanvasState): CanvasEntityState[] {
  */
 export function selectAllRenderableEntities(
   state: CanvasState
-): (CanvasRasterLayerState | CanvasControlLayerState | CanvasInpaintMaskState | CanvasRegionalGuidanceState | CanvasAnnotationLayerState)[] {
+): (
+  | CanvasRasterLayerState
+  | CanvasControlLayerState
+  | CanvasInpaintMaskState
+  | CanvasRegionalGuidanceState
+  | CanvasAnnotationLayerState
+)[] {
   return [
     ...state.rasterLayers.entities,
     ...state.controlLayers.entities,
