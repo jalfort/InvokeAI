@@ -3,6 +3,7 @@ import { useAppSelector } from 'app/store/storeHooks';
 import { IconMenuItemGroup } from 'common/components/IconMenuItem';
 import { ContextMenuItemChangeBoard } from 'features/gallery/components/ContextMenu/MenuItems/ContextMenuItemChangeBoard';
 import { ContextMenuItemCopy } from 'features/gallery/components/ContextMenu/MenuItems/ContextMenuItemCopy';
+import { ContextMenuItemDescribeImage } from 'features/gallery/components/ContextMenu/MenuItems/ContextMenuItemDescribeImage';
 import { ContextMenuItemDownload } from 'features/gallery/components/ContextMenu/MenuItems/ContextMenuItemDownload';
 import { ContextMenuItemLoadWorkflow } from 'features/gallery/components/ContextMenu/MenuItems/ContextMenuItemLoadWorkflow';
 import { ContextMenuItemLocateInGalery } from 'features/gallery/components/ContextMenu/MenuItems/ContextMenuItemLocateInGalery';
@@ -47,6 +48,7 @@ const SingleSelectionMenuItems = ({ imageDTO }: SingleSelectionMenuItemsProps) =
       {tab === 'upscaling' && <ContextMenuItemMetadataRecallActionsUpscaleTab />}
       <MenuDivider />
       <ContextMenuItemSendToUpscale />
+      <ContextMenuItemDescribeImage />
       {(tab === 'canvas' || tab === 'generate') && <ContextMenuItemUseAsRefImage />}
       <ContextMenuItemUseAsPromptTemplate />
       <ContextMenuItemNewCanvasFromImageSubMenu />

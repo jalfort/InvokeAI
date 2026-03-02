@@ -315,6 +315,26 @@
         "saveAsNew": "Save as New",
         "selectAPrompt": "Select a prompt from the list."
     },
+    "imageDescriber": {
+        "describeImage": "Describe Image",
+        "selectProvider": "Select provider...",
+        "noProviders": "No vision-capable providers configured. Add an API key for Gemini, OpenAI, Anthropic, or OpenRouter in Settings.",
+        "describe": "Describe",
+        "reDescribe": "Re-Describe",
+        "result": "Result",
+        "copyToClipboard": "Copy to Clipboard",
+        "copiedToClipboard": "Description copied to clipboard",
+        "useAsPrompt": "Use as Prompt",
+        "usedAsPrompt": "Description set as positive prompt",
+        "presets": "Description Presets",
+        "newPreset": "New Preset",
+        "saveAsNew": "Save as New",
+        "selectAPreset": "Select a preset from the list.",
+        "using": "Using",
+        "presetName": "Preset Name",
+        "systemPromptLabel": "System Prompt",
+        "systemPromptPlaceholder": "Enter your description system prompt..."
+    },
     "queue": {
         "queue": "Queue",
         "queueFront": "Add to Front of Queue",

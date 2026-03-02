@@ -23,6 +23,7 @@ import {
   Textarea,
   Tooltip,
 } from '@invoke-ai/ui-library';
+import { usePersistedTextAreaSize } from 'common/hooks/usePersistedTextareaSize';
 import type { ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +52,22 @@ type RefineResult = {
   provider: string;
   model: string;
 };
+
+const resultTextareaPersistOptions: Parameters<typeof usePersistedTextAreaSize>[2] = {
+  trackWidth: false,
+  trackHeight: true,
+  initialHeight: 160,
+};
+
+const ResultTextarea = memo(({ text }: { text: string }) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  usePersistedTextAreaSize('systemPromptLibraryResult', textareaRef, resultTextareaPersistOptions);
+
+  return (
+    <Textarea ref={textareaRef} value={text} readOnly fontSize="sm" h="160px" resize="vertical" variant="darkFilled" />
+  );
+});
+ResultTextarea.displayName = 'ResultTextarea';
 
 const PromptListItem = memo(
   ({
@@ -100,7 +117,7 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
   const { t } = useTranslation();
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: promptsData } = useGetSystemPromptsQuery();
+  const { data: promptsData } = useGetSystemPromptsQuery({ category: 'optimize' });
   const { data: textProvidersData } = useGetTextCapableProvidersQuery();
   const [createPrompt] = useCreateSystemPromptMutation();
   const [updatePrompt] = useUpdateSystemPromptMutation();
@@ -313,11 +330,11 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="4xl" isCentered>
       <ModalOverlay />
-      <ModalContent maxH="80vh">
+      <ModalContent maxH="80vh" display="flex" flexDirection="column">
         <ModalHeader fontSize="md">{t('promptOptimizer.systemPromptLibrary')}</ModalHeader>
         <ModalCloseButton />
-        <ModalBody pb={4} overflow="hidden">
-          <Flex gap={4} h="full" minH="400px">
+        <ModalBody pb={4} overflow="hidden" flex={1} minH={0}>
+          <Flex gap={4} h="full" minH={0}>
             {/* Left sidebar — prompt list */}
             <Flex direction="column" w="200px" flexShrink={0} gap={2}>
               <Flex direction="column" gap={1} overflowY="auto" flex={1}>
@@ -340,7 +357,7 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
 
             {/* Right panel — editor */}
             {selectedPrompt ? (
-              <Flex direction="column" flex={1} gap={3} overflowY="auto">
+              <Flex direction="column" flex={1} gap={3} overflowY="auto" minH={0}>
                 {/* Name field with label */}
                 <Flex direction="column" gap={1}>
                   <Text fontSize="xs" color="base.400" fontWeight="semibold">
@@ -493,14 +510,7 @@ export const SystemPromptLibraryModal = memo(({ isOpen, onClose, activeSystemPro
                       <TabPanels>
                         {refineResults.map((result, i) => (
                           <TabPanel key={i} px={0} py={2}>
-                            <Textarea
-                              value={result.text}
-                              readOnly
-                              fontSize="sm"
-                              minH="160px"
-                              resize="vertical"
-                              variant="darkFilled"
-                            />
+                            <ResultTextarea text={result.text} />
                             <Text fontSize="xs" color="base.500" mt={1}>
                               {result.provider} / {result.model}
                             </Text>

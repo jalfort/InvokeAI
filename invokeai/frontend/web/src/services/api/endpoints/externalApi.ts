@@ -87,12 +87,28 @@ type OptimizePromptResponse = {
   model: string;
 };
 
+// --- Image Description Types ---
+
+type DescribeImageRequest = {
+  image_name: string;
+  system_prompt: string;
+  provider: string;
+  model?: string | null;
+};
+
+type DescribeImageResponse = {
+  description: string;
+  provider: string;
+  model: string;
+};
+
 // --- Prompt Library Types ---
 
 export type SystemPromptEntry = {
   id: string;
   name: string;
   system_prompt: string;
+  category: string;
   is_default: boolean;
   is_locked: boolean;
   created_at: string;
@@ -106,6 +122,7 @@ type PromptLibraryListResponse = {
 type CreateSystemPromptRequest = {
   name: string;
   system_prompt: string;
+  category?: string;
 };
 
 type UpdateSystemPromptRequest = {
@@ -235,10 +252,20 @@ const externalApiEndpoints = api.injectEndpoints({
         body,
       }),
     }),
+    // --- Image Description ---
+    describeImage: build.mutation<DescribeImageResponse, DescribeImageRequest>({
+      query: (body) => ({
+        url: buildExternalApiUrl('describe_image'),
+        method: 'POST',
+        body,
+      }),
+    }),
     // --- Prompt Library ---
-    getSystemPrompts: build.query<PromptLibraryListResponse, void>({
-      query: () => ({
-        url: buildPromptLibraryUrl('list'),
+    getSystemPrompts: build.query<PromptLibraryListResponse, { category?: string } | void>({
+      query: (args) => ({
+        url:
+          buildPromptLibraryUrl('list') +
+          (args && 'category' in args && args.category ? `?category=${args.category}` : ''),
         method: 'GET',
       }),
       providesTags: ['PromptLibrary'],
@@ -341,6 +368,7 @@ export const {
   useTestExternalApiKeyMutation,
   useGetTextCapableProvidersQuery,
   useOptimizePromptMutation,
+  useDescribeImageMutation,
   useGetSystemPromptsQuery,
   useCreateSystemPromptMutation,
   useUpdateSystemPromptMutation,

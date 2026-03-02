@@ -9,6 +9,7 @@ import { DynamicPromptsModal } from 'features/dynamicPrompts/components/DynamicP
 import { TransparencyFillDialog } from 'features/externalApi/components/TransparencyFillDialog';
 import DeleteBoardModal from 'features/gallery/components/Boards/DeleteBoardModal';
 import { ImageContextMenu } from 'features/gallery/components/ContextMenu/ImageContextMenu';
+import { CanvasDescribeModal } from 'features/imageDescriber/CanvasDescribeModal';
 import { WorkflowLibraryModal } from 'features/nodes/components/sidePanel/workflow/WorkflowLibrary/WorkflowLibraryModal';
 import { CancelAllExceptCurrentQueueItemConfirmationAlertDialog } from 'features/queue/components/CancelAllExceptCurrentQueueItemConfirmationAlertDialog';
 import { ClearQueueConfirmationsAlertDialog } from 'features/queue/components/ClearQueueConfirmationAlertDialog';
@@ -56,6 +57,7 @@ export const GlobalModalIsolator = memo(() => {
       <LoadWorkflowFromGraphModal />
       <CropImageModal />
       <TransparencyFillDialog />
+      <CanvasDescribeModal />
     </>
   );
 });

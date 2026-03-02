@@ -52,15 +52,7 @@ const ResultTextarea = memo(({ text }: { text: string }) => {
   usePersistedTextAreaSize('promptOptimizerResult', textareaRef, resultTextareaPersistOptions);
 
   return (
-    <Textarea
-      ref={textareaRef}
-      value={text}
-      readOnly
-      fontSize="sm"
-      minH="120px"
-      resize="vertical"
-      variant="darkFilled"
-    />
+    <Textarea ref={textareaRef} value={text} readOnly fontSize="sm" h="120px" resize="vertical" variant="darkFilled" />
   );
 });
 
@@ -75,7 +67,7 @@ export const PromptOptimizerPopover = memo(({ onAccept }: Props) => {
   const prompt = useAppSelector(selectPositivePrompt);
 
   const { data: textProvidersData } = useGetTextCapableProvidersQuery();
-  const { data: systemPromptsData } = useGetSystemPromptsQuery();
+  const { data: systemPromptsData } = useGetSystemPromptsQuery({ category: 'optimize' });
   const [optimizePrompt, { isLoading }] = useOptimizePromptMutation();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -213,7 +205,7 @@ export const PromptOptimizerPopover = memo(({ onAccept }: Props) => {
 
   return (
     <>
-      <Popover isOpen={isOpen} onClose={onClose} isLazy placement="bottom-end">
+      <Popover isOpen={isOpen} onClose={onClose} isLazy placement="bottom-end" closeOnBlur={false}>
         <PopoverTrigger>
           <span>
             <OptimizePromptButton onClick={onOpen} onRightClick={onOpenWithoutOptimize} />

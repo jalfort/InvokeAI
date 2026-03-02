@@ -145,6 +145,14 @@ env/
 venv/
 ENV/
 
+# Runtime data — models, outputs, databases (can be 100GB+)
+models/
+outputs/
+databases/
+configs/
+nodes/
+taskflowy/
+
 # Spyder project settings
 .spyderproject
 .spyproject

@@ -47,6 +47,21 @@ STRIP_EXTENSIONS = {
     ".jsonl",
 }
 
+# Runtime data to preserve across re-deploys (dirs and files at dest root)
+RUNTIME_PRESERVE_DIRS = {
+    "databases",
+    "outputs",
+    "models",
+    "configs",
+    "nodes",
+}
+
+RUNTIME_PRESERVE_FILES = {
+    "invokeai.yaml",
+    "prompt_library.json",
+    "dynamic_endpoints.json",
+}
+
 
 def get_size_mb(path: Path) -> float:
     """Get total size of a directory in MB."""
@@ -57,14 +72,60 @@ def get_size_mb(path: Path) -> float:
     return total / (1024 * 1024)
 
 
-def copy_project(src: Path, dest: Path, include_venv: bool = True):
+def _stash_runtime(dest: Path) -> Path | None:
+    """Move runtime data to a temp dir before wiping destination."""
+    stash = dest.parent / f".deploy_stash_{dest.name}"
+    found_any = False
+
+    for dirname in RUNTIME_PRESERVE_DIRS:
+        src_dir = dest / dirname
+        if src_dir.exists():
+            stash.mkdir(parents=True, exist_ok=True)
+            print(f"  Preserving {dirname}/")
+            shutil.move(str(src_dir), str(stash / dirname))
+            found_any = True
+
+    for filename in RUNTIME_PRESERVE_FILES:
+        src_file = dest / filename
+        if src_file.exists():
+            stash.mkdir(parents=True, exist_ok=True)
+            print(f"  Preserving {filename}")
+            shutil.move(str(src_file), str(stash / filename))
+            found_any = True
+
+    return stash if found_any else None
+
+
+def _restore_runtime(dest: Path, stash: Path):
+    """Move stashed runtime data back into the destination."""
+    for item in stash.iterdir():
+        target = dest / item.name
+        if target.exists():
+            # Source repo had a copy (e.g. invokeai.yaml) — runtime version wins
+            if target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+        shutil.move(str(item), str(target))
+        print(f"  Restored {item.name}")
+    stash.rmdir()
+
+
+def copy_project(src: Path, dest: Path, include_venv: bool = True, clean: bool = False):
     """Copy project files, excluding dev-only content."""
+    stash = None
     if dest.exists():
         print(f"WARNING: Destination already exists: {dest}")
         response = input("Overwrite? (y/N): ").strip().lower()
         if response != "y":
             print("Aborted.")
             sys.exit(0)
+
+        # Stash runtime data before wiping
+        if not clean:
+            print("Preserving runtime data...")
+            stash = _stash_runtime(dest)
+
         print("Removing existing destination...")
         shutil.rmtree(dest)
 
@@ -148,6 +209,13 @@ def copy_project(src: Path, dest: Path, include_venv: bool = True):
                 print(f"  {file_count} files copied...")
 
     print(f"  {file_count} files copied, {skipped_count} skipped")
+
+    # Restore stashed runtime data
+    if dest.exists() and stash is not None and stash.exists():
+        print()
+        print("Restoring runtime data...")
+        _restore_runtime(dest, stash)
+
     return file_count
 
 
@@ -224,6 +292,11 @@ def main():
         action="store_true",
         help="Include models/ directory (can be very large)",
     )
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Wipe everything at destination (don't preserve runtime data)",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).parent.parent.resolve()
@@ -250,10 +323,8 @@ def main():
     print(f"Destination: {dest}")
     print(f"Include venv: {'yes' if not args.no_venv else 'no'}")
     print(f"Include models: {'yes' if args.include_models else 'no'}")
+    print(f"Preserve runtime: {'no (--clean)' if args.clean else 'yes'}")
     print()
-
-    src_size = get_size_mb(repo_root)
-    print(f"Source size: {src_size:.0f} MB")
 
     response = input("Proceed? (y/N): ").strip().lower()
     if response != "y":
@@ -261,7 +332,7 @@ def main():
         sys.exit(0)
 
     print()
-    copy_project(repo_root, dest, include_venv=not args.no_venv)
+    copy_project(repo_root, dest, include_venv=not args.no_venv, clean=args.clean)
 
     print()
     if not args.no_venv:
@@ -271,10 +342,8 @@ def main():
     create_launcher(dest)
 
     print()
-    dest_size = get_size_mb(dest)
     print("=" * 50)
-    print(f"Deploy complete!")
-    print(f"Size: {dest_size:.0f} MB")
+    print("Deploy complete!")
     print()
     if not args.no_venv:
         if platform.system() == "Windows":
