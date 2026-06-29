@@ -6,6 +6,7 @@ import { selectCanvasMetadata } from 'features/controlLayers/store/selectors';
 import { isQwenImageReferenceImageConfig } from 'features/controlLayers/store/types';
 import { getGlobalReferenceImageWarnings } from 'features/controlLayers/store/validators';
 import { fetchModelConfigWithTypeGuard } from 'features/metadata/util/modelFetchingHelpers';
+import type { ModelIdentifierField } from 'features/nodes/types/common';
 import { zImageField } from 'features/nodes/types/common';
 import { addImageToImage } from 'features/nodes/util/graph/generation/addImageToImage';
 import { addInpaint } from 'features/nodes/util/graph/generation/addInpaint';
@@ -95,7 +96,9 @@ export const buildQwenImageGraph = async (arg: GraphBuilderArg): Promise<GraphBu
     model,
     vae_model: params.qwenImageVaeModel ?? undefined,
     qwen_vl_encoder_model: params.qwenImageQwenVLEncoderModel ?? undefined,
-    component_source: params.qwenImageComponentSource,
+    // qwenImageComponentSource is typed as ParameterModel (a regular model identifier);
+    // it can only ever be a standard model config, so narrow to ModelIdentifierField.
+    component_source: (params.qwenImageComponentSource as ModelIdentifierField | null) ?? undefined,
   });
 
   const positivePrompt = g.addNode({

@@ -2,7 +2,7 @@ import { getPrefixedId } from 'features/controlLayers/konva/util';
 import type { ImageWithDims } from 'features/controlLayers/store/types';
 import { zModelIdentifierField } from 'features/nodes/types/common';
 import { Graph } from 'features/nodes/util/graph/generation/Graph';
-import type { ControlLoRAModelConfig, ControlNetModelConfig, T2IAdapterModelConfig } from 'services/api/types';
+import type { ControlLoRAModelConfig, ControlNetModelConfig, S, T2IAdapterModelConfig } from 'services/api/types';
 import { assert } from 'tsafe';
 import { z } from 'zod';
 
@@ -493,19 +493,22 @@ export const IMAGE_FILTERS: { [key in FilterConfig['type']]: ImageFilterData<key
     buildGraph: ({ image_name }, { model, scale, autoScale }) => {
       assert(model !== null);
       const graph = new Graph(getPrefixedId('spandrel_filter'));
+      // `model` is only ever a spandrel image-to-image model; cast away the frontend-only
+      // `external` base/type that the node schema does not accept.
+      const image_to_image_model = model as S['ModelIdentifierField'];
       const node = graph.addNode(
         autoScale
           ? {
               id: getPrefixedId('spandrel_image_to_image_autoscale'),
               type: 'spandrel_image_to_image_autoscale',
-              image_to_image_model: model,
+              image_to_image_model,
               image: { image_name },
               scale,
             }
           : {
               id: getPrefixedId('spandrel_image_to_image'),
               type: 'spandrel_image_to_image',
-              image_to_image_model: model,
+              image_to_image_model,
               image: { image_name },
             }
       );

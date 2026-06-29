@@ -9,14 +9,13 @@ import {
   useGetMissingModelsQuery,
   useGetModelConfigsQuery,
 } from 'services/api/endpoints/models';
-import type { AnyModelConfig, AnyModelConfigWithExternal, MainOrExternalModelConfig } from 'services/api/types';
+import type { AnyModelConfig, MainModelConfig } from 'services/api/types';
 import {
   isAnimaQwen3EncoderModelConfig,
   isAnimaVAEModelConfig,
   isCLIPEmbedModelConfigOrSubmodel,
   isControlLayerModelConfig,
   isControlNetModelConfig,
-  isExternalApiModelConfig,
   isFlux1VAEModelConfig,
   isFlux2DiffusersMainModelConfig,
   isFlux2VAEModelConfig,
@@ -26,7 +25,7 @@ import {
   isIPAdapterModelConfig,
   isLLaVAModelConfig,
   isLoRAModelConfig,
-  isMainOrExternalModelConfig,
+  isNonRefinerMainModelConfig,
   isQwen3EncoderModelConfig,
   isQwenImageDiffusersMainModelConfig,
   isQwenImageVAEModelConfig,
@@ -56,13 +55,9 @@ const buildModelsHook =
         modelConfigsAdapterSelectors.selectAll(missingModelsData ?? { ids: [], entities: {} }).map((m) => m.key)
       );
 
-      return (modelConfigsAdapterSelectors.selectAll(result.data) as AnyModelConfigWithExternal[])
-        .filter((config): config is T => {
-          if (isExternalApiModelConfig(config)) {
-            return false;
-          }
-          return typeGuard(config as AnyModelConfig);
-        })
+      return modelConfigsAdapterSelectors
+        .selectAll(result.data)
+        .filter(typeGuard)
         .filter((config) => !missingModelKeys.has(config.key))
         .filter(filter);
     }, [filter, result.data, missingModelsData]);
@@ -70,7 +65,7 @@ const buildModelsHook =
     return [modelConfigs, result] as const;
   };
 
-export const useMainModels = (filter: (config: MainOrExternalModelConfig) => boolean = () => true) => {
+export const useMainModels = (filter: (config: MainModelConfig) => boolean = () => true) => {
   const result = useGetModelConfigsQuery(undefined);
   const { data: missingModelsData } = useGetMissingModelsQuery();
 
@@ -83,9 +78,10 @@ export const useMainModels = (filter: (config: MainOrExternalModelConfig) => boo
       modelConfigsAdapterSelectors.selectAll(missingModelsData ?? { ids: [], entities: {} }).map((m) => m.key)
     );
 
-    return (modelConfigsAdapterSelectors.selectAll(result.data) as AnyModelConfigWithExternal[])
-      .filter((config): config is MainOrExternalModelConfig => isMainOrExternalModelConfig(config))
-      .filter((config) => !missingModelKeys.has(config.key) || isExternalApiModelConfig(config))
+    return modelConfigsAdapterSelectors
+      .selectAll(result.data)
+      .filter(isNonRefinerMainModelConfig)
+      .filter((config) => !missingModelKeys.has(config.key))
       .filter(filter);
   }, [filter, result.data, missingModelsData]);
 

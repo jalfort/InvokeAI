@@ -10,16 +10,11 @@ import { loraAllDeleted, loraRecalled } from 'features/controlLayers/store/loras
 import {
   animaQwen3EncoderModelSelected,
   animaVaeModelSelected,
-  geminiTemperatureChanged,
-  geminiThinkingLevelChanged,
   heightChanged,
   imageSizeChanged,
   kleinQwen3EncoderModelSelected,
   kleinVaeModelSelected,
   negativePromptChanged,
-  openaiBackgroundChanged,
-  openaiInputFidelityChanged,
-  openaiQualityChanged,
   positivePromptChanged,
   qwenImageComponentSourceSelected,
   qwenImageQuantizationChanged,
@@ -27,8 +22,6 @@ import {
   qwenImageShiftChanged,
   qwenImageVaeModelSelected,
   refinerModelChanged,
-  seedreamOptimizePromptChanged,
-  seedreamWatermarkChanged,
   selectBase,
   setAnimaScheduler,
   setCfgRescaleMultiplier,
@@ -1478,137 +1471,6 @@ const ImageSize: SingleMetadataHandler<string> = {
 };
 //#endregion External Image Size
 
-//#region Gemini Temperature
-const GeminiTemperature: SingleMetadataHandler<number> = {
-  [SingleMetadataKey]: true,
-  type: 'GeminiTemperature',
-  parse: (metadata, _store) => {
-    const raw = getProperty(metadata, 'gemini_temperature');
-    const parsed = z.number().min(0).max(2).parse(raw);
-    return Promise.resolve(parsed);
-  },
-  recall: (value, store) => {
-    store.dispatch(geminiTemperatureChanged(value));
-  },
-  i18nKey: 'metadata.geminiTemperature',
-  LabelComponent: MetadataLabel,
-  ValueComponent: ({ value }: SingleMetadataValueProps<number>) => <MetadataPrimitiveValue value={value} />,
-};
-//#endregion Gemini Temperature
-
-//#region Gemini Thinking Level
-const zGeminiThinkingLevel = z.enum(['minimal', 'high']);
-const GeminiThinkingLevel: SingleMetadataHandler<'minimal' | 'high'> = {
-  [SingleMetadataKey]: true,
-  type: 'GeminiThinkingLevel',
-  parse: (metadata, _store) => {
-    const raw = getProperty(metadata, 'gemini_thinking_level');
-    const parsed = zGeminiThinkingLevel.parse(raw);
-    return Promise.resolve(parsed);
-  },
-  recall: (value, store) => {
-    store.dispatch(geminiThinkingLevelChanged(value));
-  },
-  i18nKey: 'metadata.geminiThinkingLevel',
-  LabelComponent: MetadataLabel,
-  ValueComponent: ({ value }: SingleMetadataValueProps<'minimal' | 'high'>) => <MetadataPrimitiveValue value={value} />,
-};
-//#endregion Gemini Thinking Level
-
-//#region OpenAI Quality
-const OpenaiQuality: SingleMetadataHandler<'auto' | 'high' | 'medium' | 'low'> = {
-  [SingleMetadataKey]: true,
-  type: 'OpenaiQuality',
-  parse: (metadata, _store) => {
-    const raw = getProperty(metadata, 'openai_quality');
-    const parsed = z.enum(['auto', 'high', 'medium', 'low']).parse(raw);
-    return Promise.resolve(parsed);
-  },
-  recall: (value, store) => {
-    store.dispatch(openaiQualityChanged(value));
-  },
-  i18nKey: 'metadata.openaiQuality',
-  LabelComponent: MetadataLabel,
-  ValueComponent: ({ value }: SingleMetadataValueProps<'auto' | 'high' | 'medium' | 'low'>) => (
-    <MetadataPrimitiveValue value={value} />
-  ),
-};
-//#endregion OpenAI Quality
-
-//#region OpenAI Background
-const OpenaiBackground: SingleMetadataHandler<'auto' | 'transparent' | 'opaque'> = {
-  [SingleMetadataKey]: true,
-  type: 'OpenaiBackground',
-  parse: (metadata, _store) => {
-    const raw = getProperty(metadata, 'openai_background');
-    const parsed = z.enum(['auto', 'transparent', 'opaque']).parse(raw);
-    return Promise.resolve(parsed);
-  },
-  recall: (value, store) => {
-    store.dispatch(openaiBackgroundChanged(value));
-  },
-  i18nKey: 'metadata.openaiBackground',
-  LabelComponent: MetadataLabel,
-  ValueComponent: ({ value }: SingleMetadataValueProps<'auto' | 'transparent' | 'opaque'>) => (
-    <MetadataPrimitiveValue value={value} />
-  ),
-};
-//#endregion OpenAI Background
-
-//#region OpenAI Input Fidelity
-const OpenaiInputFidelity: SingleMetadataHandler<'low' | 'high'> = {
-  [SingleMetadataKey]: true,
-  type: 'OpenaiInputFidelity',
-  parse: (metadata, _store) => {
-    const raw = getProperty(metadata, 'openai_input_fidelity');
-    const parsed = z.enum(['low', 'high']).parse(raw);
-    return Promise.resolve(parsed);
-  },
-  recall: (value, store) => {
-    store.dispatch(openaiInputFidelityChanged(value));
-  },
-  i18nKey: 'metadata.openaiInputFidelity',
-  LabelComponent: MetadataLabel,
-  ValueComponent: ({ value }: SingleMetadataValueProps<'low' | 'high'>) => <MetadataPrimitiveValue value={value} />,
-};
-//#endregion OpenAI Input Fidelity
-
-//#region Seedream Watermark
-const SeedreamWatermark: SingleMetadataHandler<boolean> = {
-  [SingleMetadataKey]: true,
-  type: 'SeedreamWatermark',
-  parse: (metadata, _store) => {
-    const raw = getProperty(metadata, 'seedream_watermark');
-    const parsed = z.boolean().parse(raw);
-    return Promise.resolve(parsed);
-  },
-  recall: (value, store) => {
-    store.dispatch(seedreamWatermarkChanged(value));
-  },
-  i18nKey: 'metadata.seedreamWatermark',
-  LabelComponent: MetadataLabel,
-  ValueComponent: ({ value }: SingleMetadataValueProps<boolean>) => <MetadataPrimitiveValue value={value} />,
-};
-//#endregion Seedream Watermark
-
-//#region Seedream Optimize Prompt
-const SeedreamOptimizePrompt: SingleMetadataHandler<boolean> = {
-  [SingleMetadataKey]: true,
-  type: 'SeedreamOptimizePrompt',
-  parse: (metadata, _store) => {
-    const raw = getProperty(metadata, 'seedream_optimize_prompt');
-    const parsed = z.boolean().parse(raw);
-    return Promise.resolve(parsed);
-  },
-  recall: (value, store) => {
-    store.dispatch(seedreamOptimizePromptChanged(value));
-  },
-  i18nKey: 'metadata.seedreamOptimizePrompt',
-  LabelComponent: MetadataLabel,
-  ValueComponent: ({ value }: SingleMetadataValueProps<boolean>) => <MetadataPrimitiveValue value={value} />,
-};
-//#endregion Seedream Optimize Prompt
-
 export const ImageMetadataHandlers = {
   CreatedBy,
   GenerationMode,
@@ -1659,13 +1521,6 @@ export const ImageMetadataHandlers = {
   CanvasLayers,
   RefImages,
   ImageSize,
-  GeminiTemperature,
-  GeminiThinkingLevel,
-  OpenaiQuality,
-  OpenaiBackground,
-  OpenaiInputFidelity,
-  SeedreamWatermark,
-  SeedreamOptimizePrompt,
   // TODO: These had parsers in the prev implementation, but they were never actually used?
   // controlNet: parseControlNet,
   // controlNets: parseAllControlNets,
@@ -1975,7 +1830,11 @@ const getModelIdentiferFromKey = async (key: string, store: AppStore): Promise<A
   return modelConfig;
 };
 
-const parseModelIdentifier = async (raw: unknown, store: AppStore, type: ModelType): Promise<ModelIdentifierField> => {
+const parseModelIdentifier = async (
+  raw: unknown,
+  store: AppStore,
+  type: Exclude<ModelType, 'external_image_generator'>
+): Promise<ModelIdentifierField> => {
   try {
     // First try the current format identifier: key, name, base, type, hash
     const { key } = zModelIdentifierField.parse(raw);

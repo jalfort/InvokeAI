@@ -5,7 +5,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PiExclamationMarkBold } from 'react-icons/pi';
 import { modelConfigsAdapterSelectors, useGetModelConfigsQuery } from 'services/api/endpoints/models';
-import type { AnyModelConfigWithExternal } from 'services/api/types';
+import type { AnyModelConfig } from 'services/api/types';
 
 import { ModelEdit } from './ModelEdit';
 import { ModelView } from './ModelView';
@@ -23,7 +23,7 @@ export const Model = memo(() => {
       return null;
     }
     const modelConfig = modelConfigsAdapterSelectors.selectById(modelConfigs, selectedModelKey) as
-      | AnyModelConfigWithExternal
+      | AnyModelConfig
       | undefined;
 
     if (!modelConfig) {

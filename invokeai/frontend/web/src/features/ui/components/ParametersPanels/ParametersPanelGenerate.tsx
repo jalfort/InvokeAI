@@ -2,10 +2,9 @@ import { Box, Flex } from '@invoke-ai/ui-library';
 import { useStore } from '@nanostores/react';
 import { useAppSelector } from 'app/store/storeHooks';
 import { overlayScrollbarsParams } from 'common/components/OverlayScrollbars/constants';
-import { selectIsCogView4, selectIsExternal, selectIsSDXL } from 'features/controlLayers/store/paramsSlice';
+import { selectIsCogView4, selectIsSDXL } from 'features/controlLayers/store/paramsSlice';
 import { Prompts } from 'features/parameters/components/Prompts/Prompts';
 import { AdvancedSettingsAccordion } from 'features/settingsAccordions/components/AdvancedSettingsAccordion/AdvancedSettingsAccordion';
-import { ExternalSettingsAccordion } from 'features/settingsAccordions/components/ExternalSettingsAccordion/ExternalSettingsAccordion';
 import { GenerationSettingsAccordion } from 'features/settingsAccordions/components/GenerationSettingsAccordion/GenerationSettingsAccordion';
 import { GenerateTabImageSettingsAccordion } from 'features/settingsAccordions/components/ImageSettingsAccordion/GenerateTabImageSettingsAccordion';
 import { RefinerSettingsAccordion } from 'features/settingsAccordions/components/RefinerSettingsAccordion/RefinerSettingsAccordion';
@@ -24,7 +23,6 @@ const overlayScrollbarsStyles: CSSProperties = {
 export const ParametersPanelGenerate = memo(() => {
   const isSDXL = useAppSelector(selectIsSDXL);
   const isCogview4 = useAppSelector(selectIsCogView4);
-  const isExternal = useAppSelector(selectIsExternal);
   const isStylePresetsMenuOpen = useStore($isStylePresetsMenuOpen);
 
   return (
@@ -45,8 +43,7 @@ export const ParametersPanelGenerate = memo(() => {
               <GenerateTabImageSettingsAccordion />
               <GenerationSettingsAccordion />
               {isSDXL && <RefinerSettingsAccordion />}
-              {!isCogview4 && !isExternal && <AdvancedSettingsAccordion />}
-              {isExternal && <ExternalSettingsAccordion />}
+              {!isCogview4 && <AdvancedSettingsAccordion />}
             </Flex>
           </OverlayScrollbarsComponent>
         </Box>

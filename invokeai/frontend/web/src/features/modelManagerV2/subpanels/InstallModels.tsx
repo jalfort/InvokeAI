@@ -2,7 +2,6 @@ import type { SystemStyleObject } from '@invoke-ai/ui-library';
 import { Box, Divider, Flex, Heading, Tab, TabList, TabPanel, TabPanels, Tabs } from '@invoke-ai/ui-library';
 import { useStore } from '@nanostores/react';
 import { $installModelsTabIndex } from 'features/modelManagerV2/store/installModelsStore';
-import { ExternalProvidersForm } from 'features/modelManagerV2/subpanels/AddModelPanel/ExternalProviders/ExternalProvidersForm';
 import { HuggingFaceForm } from 'features/modelManagerV2/subpanels/AddModelPanel/HuggingFaceFolder/HuggingFaceForm';
 import { InstallModelForm } from 'features/modelManagerV2/subpanels/AddModelPanel/InstallModelForm';
 import { LaunchpadForm } from 'features/modelManagerV2/subpanels/AddModelPanel/LaunchpadForm/LaunchpadForm';
@@ -11,7 +10,7 @@ import { ScanModelsForm } from 'features/modelManagerV2/subpanels/AddModelPanel/
 import { StarterModelsForm } from 'features/modelManagerV2/subpanels/AddModelPanel/StarterModels/StarterModelsForm';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PiCubeBold, PiFolderOpenBold, PiLinkSimpleBold, PiPlugBold, PiShootingStarBold } from 'react-icons/pi';
+import { PiCubeBold, PiFolderOpenBold, PiLinkSimpleBold, PiShootingStarBold } from 'react-icons/pi';
 import { SiHuggingface } from 'react-icons/si';
 
 const installModelsTabSx: SystemStyleObject = {
@@ -62,10 +61,6 @@ export const InstallModels = memo(() => {
             {t('modelManager.huggingFace')}
           </Tab>
           <Tab sx={installModelsTabSx}>
-            <PiPlugBold />
-            {t('modelManager.externalProviders')}
-          </Tab>
-          <Tab sx={installModelsTabSx}>
             <PiFolderOpenBold />
             {t('modelManager.scanFolder')}
           </Tab>
@@ -83,9 +78,6 @@ export const InstallModels = memo(() => {
           </TabPanel>
           <TabPanel height="100%">
             <HuggingFaceForm />
-          </TabPanel>
-          <TabPanel height="100%">
-            <ExternalProvidersForm />
           </TabPanel>
           <TabPanel height="100%">
             <ScanModelsForm />

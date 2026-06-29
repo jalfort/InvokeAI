@@ -18,7 +18,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PiExclamationMarkBold, PiEyeSlashBold, PiImageBold } from 'react-icons/pi';
 import { useImageDTOFromCroppableImage } from 'services/api/endpoints/images';
-import { isExternalApiModelConfig } from 'services/api/types';
 
 import { RefImageWarningTooltipContent } from './RefImageWarningTooltipContent';
 
@@ -83,21 +82,20 @@ export const RefImagePreview = memo(() => {
   const selectedEntityId = useAppSelector(selectSelectedRefEntityId);
   const isPanelOpen = useAppSelector(selectIsRefImagePanelOpen);
   const [showWeightDisplay, setShowWeightDisplay] = useState(false);
-  const isExternalModel = !!mainModelConfig && isExternalApiModelConfig(mainModelConfig);
   const dndRef = useRef<HTMLDivElement>(null);
   const [dndListState, isDragging] = useRefImageDnd(dndRef, id);
 
   const imageDTO = useImageDTOFromCroppableImage(entity.config.image);
 
   const sx = useMemo(() => {
-    if (!isIPAdapterConfig(entity.config) || isExternalModel) {
+    if (!isIPAdapterConfig(entity.config)) {
       return baseSx;
     }
     return getImageSxWithWeight(entity.config.weight);
-  }, [entity.config, isExternalModel]);
+  }, [entity.config]);
 
   useEffect(() => {
-    if (!isIPAdapterConfig(entity.config) || isExternalModel) {
+    if (!isIPAdapterConfig(entity.config)) {
       return;
     }
     setShowWeightDisplay(true);
@@ -107,7 +105,7 @@ export const RefImagePreview = memo(() => {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [entity.config, isExternalModel]);
+  }, [entity.config]);
 
   const warnings = useMemo(() => {
     return getGlobalReferenceImageWarnings(entity, mainModelConfig);
@@ -193,7 +191,7 @@ export const RefImagePreview = memo(() => {
           ) : (
             <Skeleton h="full" aspectRatio="1/1" />
           )}
-          {isIPAdapterConfig(entity.config) && !isExternalModel && (
+          {isIPAdapterConfig(entity.config) && (
             <Flex
               position="absolute"
               inset={0}

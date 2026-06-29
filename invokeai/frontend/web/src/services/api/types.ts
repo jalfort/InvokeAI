@@ -43,21 +43,6 @@ export type InvocationJSONSchemaExtra = S['UIConfigBase'];
 
 // App Info
 export type AppVersion = S['AppVersion'];
-export type ExternalProviderStatus = {
-  provider_id: string;
-  configured: boolean;
-  message?: string | null;
-};
-export type ExternalProviderConfig = {
-  provider_id: string;
-  api_key_configured: boolean;
-  base_url?: string | null;
-  message?: string | null;
-};
-export type ExternalProviderConfigUpdate = {
-  api_key?: string;
-  base_url?: string | null;
-};
 export type UpdateModelBody = paths['/api/v2/models/i/{key}']['patch']['requestBody']['content']['application/json'];
 
 const zResourceOrigin = z.enum(['internal', 'external']);
@@ -129,94 +114,7 @@ export type ChatGPT4oModelConfig = ApiModelConfig;
 export type Gemini2_5ModelConfig = ApiModelConfig;
 type SubmodelDefinition = S['SubmodelDefinition'];
 
-export type ExternalImageSize = {
-  width: number;
-  height: number;
-};
-
-type ExternalResolutionPreset = {
-  label: string;
-  aspect_ratio: string;
-  image_size: string;
-  width: number;
-  height: number;
-};
-
-export type ExternalModelCapabilities = {
-  modes: ('txt2img' | 'img2img' | 'inpaint')[];
-  supports_reference_images?: boolean;
-  supports_negative_prompt?: boolean;
-  supports_seed?: boolean;
-  supports_guidance?: boolean;
-  supports_steps?: boolean;
-  max_images_per_request?: number | null;
-  max_image_size?: ExternalImageSize | null;
-  allowed_aspect_ratios?: string[] | null;
-  aspect_ratio_sizes?: Record<string, ExternalImageSize> | null;
-  resolution_presets?: ExternalResolutionPreset[] | null;
-  max_reference_images?: number | null;
-  mask_format?: 'alpha' | 'binary' | 'none';
-  input_image_required_for?: ('txt2img' | 'img2img' | 'inpaint')[] | null;
-};
-
-export type ExternalApiModelDefaultSettings = {
-  width?: number | null;
-  height?: number | null;
-  steps?: number | null;
-  guidance?: number | null;
-  num_images?: number | null;
-};
-
-export type ExternalPanelControlName =
-  | 'negative_prompt'
-  | 'reference_images'
-  | 'dimensions'
-  | 'seed'
-  | 'steps'
-  | 'guidance';
-
-export type ExternalModelPanelControl = {
-  name: ExternalPanelControlName;
-  slider_min?: number | null;
-  slider_max?: number | null;
-  number_input_min?: number | null;
-  number_input_max?: number | null;
-  fine_step?: number | null;
-  coarse_step?: number | null;
-  marks?: number[] | null;
-};
-
-export type ExternalModelPanelSchema = {
-  prompts: ExternalModelPanelControl[];
-  image: ExternalModelPanelControl[];
-  generation: ExternalModelPanelControl[];
-};
-
-export type ExternalApiModelConfig = {
-  key: string;
-  hash: string;
-  path: string;
-  file_size: number;
-  name: string;
-  description: string | null;
-  source: string;
-  source_type: string;
-  source_api_response: JsonObject | null;
-  cover_image: string | null;
-  base: 'external';
-  type: 'external_image_generator';
-  format: 'external_api';
-  provider_id: string;
-  provider_model_id: string;
-  capabilities: ExternalModelCapabilities;
-  default_settings?: ExternalApiModelDefaultSettings | null;
-  panel_schema?: ExternalModelPanelSchema | null;
-  tags?: string[] | null;
-  is_default?: boolean;
-};
 export type AnyModelConfig = InternalAnyModelConfig;
-export type AnyModelConfigWithExternal = AnyModelConfig | ExternalApiModelConfig;
-export type MainOrExternalModelConfig = MainModelConfig | ExternalApiModelConfig;
 
 /**
  * Checks if a list of submodels contains any that match a given variant or type
@@ -427,12 +325,6 @@ export const isFluxReduxModelConfig = (config: AnyModelConfig): config is FLUXRe
   return config.type === 'flux_redux';
 };
 
-export const isExternalApiModelConfig = (
-  config: AnyModelConfigWithExternal | null | undefined
-): config is ExternalApiModelConfig => {
-  return !!config && (config as { format?: string }).format === 'external_api';
-};
-
 export const isUnknownModelConfig = (config: AnyModelConfig): config is UnknownModelConfig => {
   return config.type === 'unknown';
 };
@@ -443,15 +335,6 @@ export const isFluxKontextModelConfig = (config: AnyModelConfig): config is FLUX
 
 export const isNonRefinerMainModelConfig = (config: AnyModelConfig): config is MainModelConfig => {
   return config.type === 'main' && config.base !== 'sdxl-refiner';
-};
-
-export const isMainOrExternalModelConfig = (
-  config: AnyModelConfigWithExternal
-): config is MainOrExternalModelConfig => {
-  if (isExternalApiModelConfig(config)) {
-    return true;
-  }
-  return isNonRefinerMainModelConfig(config);
 };
 
 export const isRefinerMainModelModelConfig = (config: AnyModelConfig): config is MainModelConfig => {

@@ -33,7 +33,7 @@ export const BboxAspectRatioSelect = memo(() => {
       }
       const fixedSize = aspectRatioSizes?.[e.target.value] ?? undefined;
       dispatch(bboxAspectRatioIdChanged({ id: e.target.value, fixedSize }));
-      // For external models with fixed sizes, also sync to params so buildExternalGraph uses correct dimensions
+      // For fixed-size aspect ratios, also sync to params so generation uses the correct dimensions
       if (fixedSize) {
         dispatch(aspectRatioIdChanged({ id: e.target.value, fixedSize }));
       }

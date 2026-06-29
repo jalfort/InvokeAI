@@ -1,6 +1,5 @@
 import type { BoxProps, ButtonProps, SystemStyleObject } from '@invoke-ai/ui-library';
 import {
-  Badge,
   Button,
   Flex,
   Icon,
@@ -37,11 +36,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import { PiCaretDownBold, PiLinkSimple } from 'react-icons/pi';
 import { useGetSetupStatusQuery } from 'services/api/endpoints/auth';
 import { useGetRelatedModelIdsBatchQuery } from 'services/api/endpoints/modelRelationships';
-import {
-  type AnyModelConfigWithExternal,
-  type ExternalApiModelConfig,
-  isExternalApiModelConfig,
-} from 'services/api/types';
+import type { AnyModelConfig } from 'services/api/types';
 
 const selectSelectedModelKeys = createMemoizedSelector(selectParamsSlice, selectLoRAsSlice, (params, loras) => {
   const keys: string[] = [];
@@ -72,7 +67,7 @@ const selectSelectedModelKeys = createMemoizedSelector(selectParamsSlice, select
 type WithStarred<T> = T & { starred?: boolean };
 
 // Type for models with starred field
-const getOptionId = <T extends AnyModelConfigWithExternal>(modelConfig: WithStarred<T>) => modelConfig.key;
+const getOptionId = <T extends AnyModelConfig>(modelConfig: WithStarred<T>) => modelConfig.key;
 
 const ModelManagerLink = memo((props: ButtonProps) => {
   const onClick = useCallback(() => {
@@ -128,17 +123,17 @@ const NoOptionsFallback = memo(({ noOptionsText }: { noOptionsText?: string }) =
 });
 NoOptionsFallback.displayName = 'NoOptionsFallback';
 
-const getGroupIDFromModelConfig = (modelConfig: AnyModelConfigWithExternal): string => modelConfig.base;
+const getGroupIDFromModelConfig = (modelConfig: AnyModelConfig): string => modelConfig.base;
 
-const getGroupNameFromModelConfig = (modelConfig: AnyModelConfigWithExternal): string => {
+const getGroupNameFromModelConfig = (modelConfig: AnyModelConfig): string => {
   return MODEL_BASE_TO_LONG_NAME[modelConfig.base];
 };
 
-const getGroupShortNameFromModelConfig = (modelConfig: AnyModelConfigWithExternal): string => {
+const getGroupShortNameFromModelConfig = (modelConfig: AnyModelConfig): string => {
   return MODEL_BASE_TO_SHORT_NAME[modelConfig.base];
 };
 
-const getGroupColorSchemeFromModelConfig = (modelConfig: AnyModelConfigWithExternal): string => {
+const getGroupColorSchemeFromModelConfig = (modelConfig: AnyModelConfig): string => {
   return MODEL_BASE_TO_COLOR[modelConfig.base];
 };
 
@@ -165,7 +160,7 @@ const removeStarred = <T,>(obj: WithStarred<T>): T => {
 };
 
 export const ModelPicker = typedMemo(
-  <T extends AnyModelConfigWithExternal = AnyModelConfigWithExternal>({
+  <T extends AnyModelConfig = AnyModelConfig>({
     pickerId,
     modelConfigs,
     selectedModelConfig,
@@ -417,10 +412,8 @@ const optionNameSx: SystemStyleObject = {
 };
 
 const PickerOptionComponent = typedMemo(
-  <T extends AnyModelConfigWithExternal>({ option, ...rest }: { option: WithStarred<T> } & BoxProps) => {
+  <T extends AnyModelConfig>({ option, ...rest }: { option: WithStarred<T> } & BoxProps) => {
     const { isCompactView } = usePickerContext<WithStarred<T>>();
-    const externalOption = isExternalApiModelConfig(option) ? (option as ExternalApiModelConfig) : null;
-    const providerLabel = externalOption ? externalOption.provider_id.toUpperCase() : null;
 
     return (
       <Flex {...rest} sx={optionSx} data-is-compact={isCompactView}>
@@ -431,15 +424,6 @@ const PickerOptionComponent = typedMemo(
             <Text className="picker-option" sx={optionNameSx} data-is-compact={isCompactView}>
               {option.name}
             </Text>
-            {!isCompactView && externalOption && (
-              <Badge
-                colorScheme={MODEL_BASE_TO_COLOR[externalOption.base as BaseModelType]}
-                variant="subtle"
-                flexShrink={0}
-              >
-                {providerLabel}
-              </Badge>
-            )}
             <Spacer />
             {option.file_size > 0 && (
               <Text
@@ -472,13 +456,11 @@ const BASE_KEYWORDS: { [key in BaseModelType]?: string[] } = {
   'sd-3': ['sd3', 'sd3.0', 'sd3.5', 'sd-3'],
 };
 
-const isMatch = <T extends AnyModelConfigWithExternal>(model: WithStarred<T>, searchTerm: string) => {
+const isMatch = <T extends AnyModelConfig>(model: WithStarred<T>, searchTerm: string) => {
   const regex = getRegex(searchTerm);
   const bases = BASE_KEYWORDS[model.base] ?? [model.base];
-  const externalModel = isExternalApiModelConfig(model) ? (model as ExternalApiModelConfig) : null;
-  const externalSearch = externalModel ? ` ${externalModel.provider_id} ${externalModel.provider_model_id}` : '';
   const testString =
-    `${model.name} ${bases.join(' ')} ${model.type} ${model.description ?? ''} ${model.format}${externalSearch}`.toLowerCase();
+    `${model.name} ${bases.join(' ')} ${model.type} ${model.description ?? ''} ${model.format}`.toLowerCase();
 
   if (testString.includes(searchTerm) || regex.test(testString)) {
     return true;

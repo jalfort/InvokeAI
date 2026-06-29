@@ -16,7 +16,7 @@ import { useCallback } from 'react';
 import { serializeError } from 'serialize-error';
 import { checkBoardAccess, checkImageAccess, checkModelAccess } from 'services/api/hooks/accessChecks';
 import { z } from 'zod';
-import { fromZodError } from 'zod-validation-error';
+import { fromError } from 'zod-validation-error';
 
 const log = logger('workflows');
 
@@ -120,7 +120,7 @@ export const useValidateAndLoadWorkflow = () => {
           });
         } else if (e instanceof z.ZodError) {
           // There was a problem validating the workflow itself
-          const { message } = fromZodError(e, {
+          const { message } = fromError(e, {
             prefix: t('nodes.workflowValidation'),
           });
           log.error({ error: serializeError(e) }, message);

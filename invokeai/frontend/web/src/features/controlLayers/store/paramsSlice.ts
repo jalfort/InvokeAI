@@ -48,11 +48,10 @@ import type {
   ParameterT5EncoderModel,
   ParameterVAEModel,
 } from 'features/parameters/types/parameterSchemas';
-import { getExternalPanelControl, hasExternalPanelControl } from 'features/parameters/util/externalPanelSchema';
 import { getGridSize, getIsSizeOptimal, getOptimalDimension } from 'features/parameters/util/optimalDimension';
 import { modelConfigsAdapterSelectors, selectModelConfigsQuery } from 'services/api/endpoints/models';
-import type { AnyModelConfigWithExternal } from 'services/api/types';
-import { isExternalApiModelConfig, isNonRefinerMainModelConfig } from 'services/api/types';
+import type { AnyModelConfig } from 'services/api/types';
+import { isNonRefinerMainModelConfig } from 'services/api/types';
 import { assert } from 'tsafe';
 
 const slice = createSlice({
@@ -520,27 +519,6 @@ const slice = createSlice({
     imageSizeChanged: (state, action: PayloadAction<string | null>) => {
       state.imageSize = action.payload;
     },
-    openaiQualityChanged: (state, action: PayloadAction<'auto' | 'high' | 'medium' | 'low'>) => {
-      state.openaiQuality = action.payload;
-    },
-    openaiBackgroundChanged: (state, action: PayloadAction<'auto' | 'transparent' | 'opaque'>) => {
-      state.openaiBackground = action.payload;
-    },
-    openaiInputFidelityChanged: (state, action: PayloadAction<'low' | 'high' | null>) => {
-      state.openaiInputFidelity = action.payload;
-    },
-    geminiTemperatureChanged: (state, action: PayloadAction<number | null>) => {
-      state.geminiTemperature = action.payload;
-    },
-    geminiThinkingLevelChanged: (state, action: PayloadAction<'minimal' | 'high' | null>) => {
-      state.geminiThinkingLevel = action.payload;
-    },
-    seedreamWatermarkChanged: (state, action: PayloadAction<boolean>) => {
-      state.seedreamWatermark = action.payload;
-    },
-    seedreamOptimizePromptChanged: (state, action: PayloadAction<boolean>) => {
-      state.seedreamOptimizePrompt = action.payload;
-    },
     resolutionPresetSelected: (
       state,
       action: PayloadAction<{ imageSize: string; aspectRatio: string; width: number; height: number }>
@@ -585,9 +563,6 @@ const hasModelClipSkip = (model: ParameterModel | null) => {
 };
 
 const getModelMaxClipSkip = (model: ParameterModel) => {
-  if (model.base === 'external') {
-    return undefined;
-  }
   if (model.base === 'sdxl') {
     // We don't support user-defined CLIP skip for SDXL because it doesn't do anything useful
     return 0;
@@ -703,13 +678,6 @@ export const {
   resolutionPresetSelected,
   imageSizeChanged,
   paramsReset,
-  openaiQualityChanged,
-  openaiBackgroundChanged,
-  openaiInputFidelityChanged,
-  geminiTemperatureChanged,
-  geminiThinkingLevelChanged,
-  seedreamWatermarkChanged,
-  seedreamOptimizePromptChanged,
   paramsRecalled,
   animaVaeModelSelected,
   animaQwen3EncoderModelSelected,
@@ -760,7 +728,6 @@ export const selectIsCogView4 = createParamsSelector((params) => params.model?.b
 export const selectIsZImage = createParamsSelector((params) => params.model?.base === 'z-image');
 export const selectIsAnima = createParamsSelector((params) => params.model?.base === 'anima');
 export const selectIsFlux2 = createParamsSelector((params) => params.model?.base === 'flux2');
-export const selectIsExternal = createParamsSelector((params) => params.model?.base === 'external');
 export const selectIsQwenImage = createParamsSelector((params) => params.model?.base === 'qwen-image');
 export const selectIsFluxKontext = createParamsSelector((params) => {
   if (params.model?.base === 'flux' && params.model?.name.toLowerCase().includes('kontext')) {
@@ -814,64 +781,35 @@ export const selectOptimizedDenoisingEnabled = createParamsSelector((params) => 
 export const selectPositivePrompt = createParamsSelector((params) => params.positivePrompt);
 export const selectNegativePrompt = createParamsSelector((params) => params.negativePrompt);
 export const selectNegativePromptWithFallback = createParamsSelector((params) => params.negativePrompt ?? '');
-export const selectModelConfig = createSelector(
-  selectModelConfigsQuery,
-  selectParamsSlice,
-  (modelConfigs, { model }) => {
-    if (!modelConfigs.data) {
-      return null;
-    }
-    if (!model) {
-      return null;
-    }
-    return (
-      (modelConfigsAdapterSelectors.selectById(modelConfigs.data, model.key) as
-        | AnyModelConfigWithExternal
-        | undefined) ?? null
-    );
+const selectModelConfig = createSelector(selectModelConfigsQuery, selectParamsSlice, (modelConfigs, { model }) => {
+  if (!modelConfigs.data) {
+    return null;
   }
-);
+  if (!model) {
+    return null;
+  }
+  return (modelConfigsAdapterSelectors.selectById(modelConfigs.data, model.key) as AnyModelConfig | undefined) ?? null;
+});
 export const selectHasNegativePrompt = createParamsSelector((params) => params.negativePrompt !== null);
 export const selectModelSupportsNegativePrompt = createSelector(selectModel, (model) => {
   if (!model) {
     return false;
   }
-  if (model.base === 'external') {
-    return false;
-  }
   return SUPPORTS_NEGATIVE_PROMPT_BASE_MODELS.includes(model.base);
 });
-export const selectModelSupportsRefImages = createSelector(selectModel, selectModelConfig, (model, modelConfig) => {
+export const selectModelSupportsRefImages = createSelector(selectModel, (model) => {
   if (!model) {
-    return false;
-  }
-  if (modelConfig && isExternalApiModelConfig(modelConfig)) {
-    return hasExternalPanelControl(modelConfig, 'prompts', 'reference_images');
-  }
-  if (model.base === 'external') {
     return false;
   }
   return SUPPORTS_REF_IMAGES_BASE_MODELS.includes(model.base);
 });
 export const selectModelSupportsOptimizedDenoising = createSelector(
   selectModel,
-  (model) => !!model && model.base !== 'external' && SUPPORTS_OPTIMIZED_DENOISING_BASE_MODELS.includes(model.base)
+  (model) => !!model && SUPPORTS_OPTIMIZED_DENOISING_BASE_MODELS.includes(model.base)
 );
-export const selectModelSupportsGuidance = createSelector(selectModel, (model) => {
+export const selectModelSupportsSeed = createSelector(selectModel, (model) => {
   if (!model) {
     return false;
-  }
-  if (model.base === 'external') {
-    return false;
-  }
-  return true;
-});
-export const selectModelSupportsSeed = createSelector(selectModel, selectModelConfig, (model, modelConfig) => {
-  if (!model) {
-    return false;
-  }
-  if (modelConfig && isExternalApiModelConfig(modelConfig)) {
-    return hasExternalPanelControl(modelConfig, 'image', 'seed');
   }
   return true;
 });
@@ -879,25 +817,13 @@ export const selectModelSupportsSteps = createSelector(selectModel, (model) => {
   if (!model) {
     return false;
   }
-  if (model.base === 'external') {
-    return false;
-  }
   return true;
 });
-export const selectModelSupportsDimensions = createSelector(selectModel, selectModelConfig, (model, modelConfig) => {
+export const selectModelSupportsDimensions = createSelector(selectModel, (model) => {
   if (!model) {
     return false;
   }
-  if (modelConfig && isExternalApiModelConfig(modelConfig)) {
-    return hasExternalPanelControl(modelConfig, 'image', 'dimensions');
-  }
   return true;
-});
-export const selectSeedControl = createSelector(selectModelConfig, (modelConfig) => {
-  if (modelConfig && isExternalApiModelConfig(modelConfig)) {
-    return getExternalPanelControl(modelConfig, 'image', 'seed');
-  }
-  return null;
 });
 export const selectScheduler = createParamsSelector((params) => params.scheduler);
 export const selectFluxScheduler = createParamsSelector((params) => params.fluxScheduler);
@@ -942,51 +868,18 @@ export const selectHeight = createParamsSelector((params) => params.dimensions.h
 export const selectAspectRatioID = createParamsSelector((params) => params.dimensions.aspectRatio.id);
 export const selectAspectRatioValue = createParamsSelector((params) => params.dimensions.aspectRatio.value);
 export const selectAspectRatioIsLocked = createParamsSelector((params) => params.dimensions.aspectRatio.isLocked);
-export const selectAllowedAspectRatioIDs = createSelector(selectModelConfig, (modelConfig) => {
-  if (!modelConfig || !isExternalApiModelConfig(modelConfig)) {
-    return null;
-  }
-  const allowed = modelConfig.capabilities.allowed_aspect_ratios;
-  return allowed?.length ? allowed : null;
-});
-export const selectAspectRatioSizes = createSelector(selectModelConfig, (modelConfig) => {
-  if (!modelConfig || !isExternalApiModelConfig(modelConfig)) {
-    return null;
-  }
-  return modelConfig.capabilities.aspect_ratio_sizes ?? null;
-});
-export const selectResolutionPresets = createSelector(selectModelConfig, (modelConfig) => {
-  if (!modelConfig || !isExternalApiModelConfig(modelConfig)) {
-    return null;
-  }
-  return modelConfig.capabilities.resolution_presets ?? null;
-});
+export const selectAllowedAspectRatioIDs = createSelector(selectModelConfig, () => null);
+export const selectAspectRatioSizes = createSelector(selectModelConfig, () => null);
+const selectResolutionPresets = createSelector(selectModelConfig, () => null);
 export const selectHasFixedDimensionSizes = createSelector(
   selectAspectRatioSizes,
   selectResolutionPresets,
-  (sizes, presets) => sizes !== null || (presets !== null && presets.length > 0)
+  (sizes, presets) => sizes !== null || presets !== null
 );
-export const selectImageSize = createParamsSelector((params) => params.imageSize);
-export const selectOpenaiQuality = createParamsSelector((params) => params.openaiQuality);
-export const selectOpenaiBackground = createParamsSelector((params) => params.openaiBackground);
-export const selectOpenaiInputFidelity = createParamsSelector((params) => params.openaiInputFidelity);
-export const selectGeminiTemperature = createParamsSelector((params) => params.geminiTemperature);
-export const selectGeminiThinkingLevel = createParamsSelector((params) => params.geminiThinkingLevel);
-export const selectSeedreamWatermark = createParamsSelector((params) => params.seedreamWatermark);
-export const selectSeedreamOptimizePrompt = createParamsSelector((params) => params.seedreamOptimizePrompt);
-export const selectExternalProviderId = createSelector(selectModelConfig, (modelConfig) => {
-  if (modelConfig && isExternalApiModelConfig(modelConfig)) {
-    return modelConfig.provider_id;
-  }
-  return null;
-});
 
 export const selectMainModelConfig = createSelector(selectModelConfig, (modelConfig) => {
   if (!modelConfig) {
     return null;
-  }
-  if (isExternalApiModelConfig(modelConfig)) {
-    return modelConfig;
   }
   if (!isNonRefinerMainModelConfig(modelConfig)) {
     return null;

@@ -45,7 +45,8 @@ export const addFLUXLoRAs = (
 
   for (const lora of enabledLoRAs) {
     const { weight } = lora;
-    const parsedModel = zModelIdentifierField.parse(lora.model);
+    // enabledLoRAs is filtered to `base === 'flux'`, so the parsed model is always a backend model identifier.
+    const parsedModel = zModelIdentifierField.parse(lora.model) as S['ModelIdentifierField'];
 
     const loraSelector = g.addNode({
       type: 'lora_selector',
