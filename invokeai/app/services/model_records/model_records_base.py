@@ -14,10 +14,6 @@ from invokeai.app.services.shared.pagination import PaginatedResults
 from invokeai.app.services.shared.sqlite.sqlite_common import SQLiteDirection
 from invokeai.app.util.model_exclude_null import BaseModelExcludeNull
 from invokeai.backend.model_manager.configs.controlnet import ControlAdapterDefaultSettings
-from invokeai.backend.model_manager.configs.external_api import (
-    ExternalApiModelDefaultSettings,
-    ExternalModelCapabilities,
-)
 from invokeai.backend.model_manager.configs.factory import AnyModelConfig
 from invokeai.backend.model_manager.configs.lora import LoraModelDefaultSettings
 from invokeai.backend.model_manager.configs.main import MainModelDefaultSettings
@@ -110,19 +106,9 @@ class ModelRecordChanges(BaseModelExcludeNull):
     format: Optional[str] = Field(description="format of model file", default=None)
     trigger_phrases: Optional[set[str]] = Field(description="Set of trigger phrases for this model", default=None)
     default_settings: Optional[
-        MainModelDefaultSettings
-        | LoraModelDefaultSettings
-        | ControlAdapterDefaultSettings
-        | ExternalApiModelDefaultSettings
+        MainModelDefaultSettings | LoraModelDefaultSettings | ControlAdapterDefaultSettings
     ] = Field(description="Default settings for this model", default=None)
 
-    # External API model changes
-    provider_id: Optional[str] = Field(description="External provider identifier", default=None)
-    provider_model_id: Optional[str] = Field(description="External provider model identifier", default=None)
-    capabilities: Optional[ExternalModelCapabilities] = Field(
-        description="External model capabilities",
-        default=None,
-    )
     cpu_only: Optional[bool] = Field(description="Whether this model should run on CPU only", default=None)
 
     # Checkpoint-specific changes

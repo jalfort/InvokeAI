@@ -32,7 +32,6 @@ from invokeai.app.services.model_records import (
 from invokeai.app.services.orphaned_models import OrphanedModelInfo
 from invokeai.app.services.shared.sqlite.sqlite_common import SQLiteDirection
 from invokeai.app.util.suppress_output import SuppressOutput
-from invokeai.backend.model_manager.configs.external_api import ExternalApiModelConfig
 from invokeai.backend.model_manager.configs.factory import AnyModelConfig, ModelConfigFactory
 from invokeai.backend.model_manager.configs.main import (
     Main_Checkpoint_SD1_Config,
@@ -81,32 +80,8 @@ def add_cover_image_to_model_config(config: AnyModelConfig, dependencies: Type[A
     return config.model_copy(update={"cover_image": cover_image})
 
 
-def apply_external_starter_model_overrides(config: AnyModelConfig) -> AnyModelConfig:
-    """Overlay starter-model metadata onto installed external model configs."""
-    if not isinstance(config, ExternalApiModelConfig):
-        return config
-
-    starter_match = next((starter for starter in STARTER_MODELS if starter.source == config.source), None)
-    if starter_match is None:
-        return config
-
-    model_updates: dict[str, object] = {}
-    if starter_match.capabilities is not None:
-        model_updates["capabilities"] = starter_match.capabilities
-    if starter_match.default_settings is not None:
-        model_updates["default_settings"] = starter_match.default_settings
-    if starter_match.panel_schema is not None:
-        model_updates["panel_schema"] = starter_match.panel_schema
-
-    if not model_updates:
-        return config
-
-    return config.model_copy(update=model_updates)
-
-
 def prepare_model_config_for_response(config: AnyModelConfig, dependencies: Type[ApiDependencies]) -> AnyModelConfig:
-    """Apply API-only model config overlays before returning a response."""
-    config = apply_external_starter_model_overrides(config)
+    """Apply model config overlays before returning a response."""
     return add_cover_image_to_model_config(config, dependencies)
 
 
@@ -210,8 +185,6 @@ async def list_missing_models() -> ModelsList:
 
     missing_models: list[AnyModelConfig] = []
     for model_config in record_store.all_models():
-        if model_config.base == BaseModelType.External or model_config.format == ModelFormat.ExternalApi:
-            continue
         if not (models_path / model_config.path).resolve().exists():
             missing_models.append(model_config)
 
