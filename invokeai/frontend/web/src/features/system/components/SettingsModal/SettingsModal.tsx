@@ -23,6 +23,7 @@ import ScrollableContent from 'common/components/OverlayScrollbars/ScrollableCon
 import { buildUseBoolean } from 'common/hooks/useBoolean';
 import { selectCurrentUser } from 'features/auth/store/authSlice';
 import { selectShouldUseCPUNoise, shouldUseCpuNoiseChanged } from 'features/controlLayers/store/paramsSlice';
+import { ExternalApiKeySettings } from 'features/externalApi/components/ExternalApiKeySettings';
 import { useRefreshAfterResetModal } from 'features/system/components/SettingsModal/RefreshAfterResetModal';
 import { SettingsDeveloperLogIsEnabled } from 'features/system/components/SettingsModal/SettingsDeveloperLogIsEnabled';
 import { SettingsDeveloperLogLevel } from 'features/system/components/SettingsModal/SettingsDeveloperLogLevel';
@@ -401,6 +402,10 @@ const SettingsModal = (props: { children: ReactElement<{ onClick?: () => void }>
                     <SettingsDeveloperLogIsEnabled />
                     <SettingsDeveloperLogLevel />
                     <SettingsDeveloperLogNamespaces />
+                  </StickyScrollable>
+
+                  <StickyScrollable title="External APIs">
+                    <ExternalApiKeySettings />
                   </StickyScrollable>
 
                   <StickyScrollable title={t('settings.clearIntermediates')}>

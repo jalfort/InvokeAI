@@ -12,6 +12,7 @@ vi.mock('i18next', () => ({
 
 import type { ParamsState, RefImagesState } from 'features/controlLayers/store/types';
 import type { DynamicPromptsState } from 'features/dynamicPrompts/store/dynamicPromptsSlice';
+import type { ExternalApiState } from 'features/externalApi/store/externalApiSlice';
 import type { MainModelConfig } from 'services/api/types';
 
 import { getReasonsWhyCannotEnqueueCanvasTab, getReasonsWhyCannotEnqueueGenerateTab } from './readiness';
@@ -92,6 +93,7 @@ const buildGenerateTabArg = (overrides: {
   refImages: baseRefImages,
   loras: [],
   dynamicPrompts: baseDynamicPrompts,
+  externalApi: { isEnabled: false } as ExternalApiState,
   hasFlux2DiffusersVaeSource: overrides.hasFlux2DiffusersVaeSource ?? false,
   hasFlux2DiffusersQwen3Source: overrides.hasFlux2DiffusersQwen3Source ?? false,
 });
@@ -124,6 +126,7 @@ const buildCanvasTabArg = (overrides: {
   refImages: baseRefImages,
   loras: [],
   dynamicPrompts: baseDynamicPrompts,
+  externalApi: { isEnabled: false } as ExternalApiState,
   canvasIsFiltering: false,
   canvasIsTransforming: false,
   canvasIsRasterizing: false,

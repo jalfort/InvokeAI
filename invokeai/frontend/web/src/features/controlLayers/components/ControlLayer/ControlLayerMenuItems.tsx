@@ -3,6 +3,7 @@ import { IconMenuItemGroup } from 'common/components/IconMenuItem';
 import { CanvasEntityMenuItemsArrange } from 'features/controlLayers/components/common/CanvasEntityMenuItemsArrange';
 import { CanvasEntityMenuItemsCropToBbox } from 'features/controlLayers/components/common/CanvasEntityMenuItemsCropToBbox';
 import { CanvasEntityMenuItemsDelete } from 'features/controlLayers/components/common/CanvasEntityMenuItemsDelete';
+import { CanvasEntityMenuItemsDescribe } from 'features/controlLayers/components/common/CanvasEntityMenuItemsDescribe';
 import { CanvasEntityMenuItemsDuplicate } from 'features/controlLayers/components/common/CanvasEntityMenuItemsDuplicate';
 import { CanvasEntityMenuItemsFilter } from 'features/controlLayers/components/common/CanvasEntityMenuItemsFilter';
 import { CanvasEntityMenuItemsMergeDown } from 'features/controlLayers/components/common/CanvasEntityMenuItemsMergeDown';
@@ -33,6 +34,7 @@ export const ControlLayerMenuItems = memo(() => {
       <ControlLayerMenuItemsConvertToSubMenu />
       <CanvasEntityMenuItemsCropToBbox />
       <CanvasEntityMenuItemsSave />
+      <CanvasEntityMenuItemsDescribe />
     </>
   );
 });

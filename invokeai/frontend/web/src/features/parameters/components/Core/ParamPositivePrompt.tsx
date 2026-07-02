@@ -30,6 +30,7 @@ import { PromptPopover } from 'features/prompt/PromptPopover';
 import { clearPromptUndo, consumePromptUndo } from 'features/prompt/promptUndo';
 import { usePrompt } from 'features/prompt/usePrompt';
 import { usePromptAttentionHotkeys } from 'features/prompt/usePromptAttentionHotkeys';
+import { PromptOptimizerPopover } from 'features/promptOptimizer/PromptOptimizerPopover';
 import {
   selectStylePresetActivePresetId,
   selectStylePresetViewMode,
@@ -264,6 +265,13 @@ export const ParamPositivePrompt = memo(() => {
     onPromptChange: (prompt) => dispatch(positivePromptChanged(prompt)),
   });
 
+  const onAcceptOptimized = useCallback(
+    (optimizedPrompt: string) => {
+      dispatch(positivePromptChanged(optimizedPrompt));
+    },
+    [dispatch]
+  );
+
   // Drop target for gallery images -> Image to Prompt
   const dropTargetRef = useRef<HTMLDivElement>(null);
   const [droppedImage, setDroppedImage] = useState<ImageDTO | undefined>(undefined);
@@ -345,6 +353,7 @@ export const ParamPositivePrompt = memo(() => {
               <ExpandPromptButton />
               <ImageToPromptButton droppedImage={droppedImage} onClearDroppedImage={clearDroppedImage} />
               <PositivePromptHistoryIconButton />
+              <PromptOptimizerPopover onAccept={onAcceptOptimized} />
               {modelSupportsNegativePrompt && <NegativePromptToggleButton />}
             </Flex>
           </PromptOverlayButtonWrapper>

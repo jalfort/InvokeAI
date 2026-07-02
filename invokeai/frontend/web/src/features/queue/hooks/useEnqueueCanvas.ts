@@ -11,10 +11,14 @@ import {
   selectNegativePrompt,
   selectPositivePrompt,
 } from 'features/controlLayers/store/paramsSlice';
+import { selectCanvasSlice } from 'features/controlLayers/store/selectors';
+import { selectExternalApiIsEnabled } from 'features/externalApi/store/externalApiSlice';
+import { prepareCanvasComposite } from 'features/externalApi/util/prepareCanvasComposite';
 import type { BaseModelType } from 'features/nodes/types/common';
 import { prepareLinearUIBatch } from 'features/nodes/util/graph/buildLinearBatchConfig';
 import { buildAnimaGraph } from 'features/nodes/util/graph/generation/buildAnimaGraph';
 import { buildCogView4Graph } from 'features/nodes/util/graph/generation/buildCogView4Graph';
+import { buildExternalAPIGraph } from 'features/nodes/util/graph/generation/buildExternalAPIGraph';
 import { buildFLUXGraph } from 'features/nodes/util/graph/generation/buildFLUXGraph';
 import { buildQwenImageGraph } from 'features/nodes/util/graph/generation/buildQwenImageGraph';
 import { buildSD1Graph } from 'features/nodes/util/graph/generation/buildSD1Graph';
@@ -23,7 +27,7 @@ import { buildSDXLGraph } from 'features/nodes/util/graph/generation/buildSDXLGr
 import { buildZImageGraph } from 'features/nodes/util/graph/generation/buildZImageGraph';
 import { selectCanvasDestination } from 'features/nodes/util/graph/graphBuilderUtils';
 import type { GraphBuilderArg } from 'features/nodes/util/graph/types';
-import { UnsupportedGenerationModeError } from 'features/nodes/util/graph/types';
+import { GenerationCancelledError, UnsupportedGenerationModeError } from 'features/nodes/util/graph/types';
 import { toast } from 'features/toast/toast';
 import { useCallback } from 'react';
 import { serializeError } from 'serialize-error';
@@ -39,17 +43,40 @@ const enqueueCanvas = async (store: AppStore, canvasManager: CanvasManager, prep
 
   const destination = selectCanvasDestination(state);
 
-  const model = state.params.model;
-  if (!model) {
-    log.error('No model found in state');
-    return;
+  const isExternalApi = selectExternalApiIsEnabled(state);
+
+  // Determine the base model type - for external API, model selection is optional
+  let base: BaseModelType;
+  if (isExternalApi) {
+    base = 'any';
+  } else {
+    const model = state.params.model;
+    if (!model) {
+      log.error('No model found in state');
+      return;
+    }
+    base = model.base;
   }
 
-  const base = model.base;
-
   const buildGraphResult = await withResultAsync(async () => {
-    const generationMode = await canvasManager.compositor.getGenerationMode();
+    // For External API: skip expensive generationMode detection — buildExternalAPIGraph does its own adapter checks
+    const generationMode = isExternalApi ? 'txt2img' : await canvasManager.compositor.getGenerationMode();
     const graphBuilderArg: GraphBuilderArg = { generationMode, state, manager: canvasManager };
+
+    // Pre-process canvas for External API: transparency flatten + 75% downscale
+    if (isExternalApi) {
+      const canvas = selectCanvasSlice(state);
+      const { rect } = canvas.bbox;
+      const preComposited = await prepareCanvasComposite(canvasManager, rect);
+      if (preComposited) {
+        graphBuilderArg.preCompositedCanvas = preComposited;
+      }
+    }
+
+    // External API takes priority over local model pipeline
+    if (isExternalApi) {
+      return await buildExternalAPIGraph(graphBuilderArg);
+    }
 
     switch (base) {
       case 'sdxl':
@@ -76,6 +103,10 @@ const enqueueCanvas = async (store: AppStore, canvasManager: CanvasManager, prep
   });
 
   if (buildGraphResult.isErr()) {
+    // Silent abort when user cancels (e.g. transparency fill dialog)
+    if (buildGraphResult.error instanceof GenerationCancelledError) {
+      return;
+    }
     let title = 'Failed to build graph';
     let status: AlertStatus = 'error';
     let description: string | null = null;

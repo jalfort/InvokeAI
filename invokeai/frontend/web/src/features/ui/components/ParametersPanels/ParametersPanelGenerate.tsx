@@ -3,6 +3,7 @@ import { useStore } from '@nanostores/react';
 import { useAppSelector } from 'app/store/storeHooks';
 import { overlayScrollbarsParams } from 'common/components/OverlayScrollbars/constants';
 import { selectIsCogView4, selectIsSDXL } from 'features/controlLayers/store/paramsSlice';
+import { selectExternalApiIsEnabled } from 'features/externalApi/store/externalApiSlice';
 import { Prompts } from 'features/parameters/components/Prompts/Prompts';
 import { AdvancedSettingsAccordion } from 'features/settingsAccordions/components/AdvancedSettingsAccordion/AdvancedSettingsAccordion';
 import { GenerationSettingsAccordion } from 'features/settingsAccordions/components/GenerationSettingsAccordion/GenerationSettingsAccordion';
@@ -23,6 +24,7 @@ const overlayScrollbarsStyles: CSSProperties = {
 export const ParametersPanelGenerate = memo(() => {
   const isSDXL = useAppSelector(selectIsSDXL);
   const isCogview4 = useAppSelector(selectIsCogView4);
+  const isExternalApi = useAppSelector(selectExternalApiIsEnabled);
   const isStylePresetsMenuOpen = useStore($isStylePresetsMenuOpen);
 
   return (
@@ -40,10 +42,10 @@ export const ParametersPanelGenerate = memo(() => {
           <OverlayScrollbarsComponent defer style={overlayScrollbarsStyles} options={overlayScrollbarsParams.options}>
             <Flex gap={2} flexDirection="column" h="full" w="full">
               <Prompts />
-              <GenerateTabImageSettingsAccordion />
+              {!isExternalApi && <GenerateTabImageSettingsAccordion />}
               <GenerationSettingsAccordion />
-              {isSDXL && <RefinerSettingsAccordion />}
-              {!isCogview4 && <AdvancedSettingsAccordion />}
+              {!isExternalApi && isSDXL && <RefinerSettingsAccordion />}
+              {!isExternalApi && !isCogview4 && <AdvancedSettingsAccordion />}
             </Flex>
           </OverlayScrollbarsComponent>
         </Box>

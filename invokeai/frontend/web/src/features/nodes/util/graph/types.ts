@@ -2,7 +2,7 @@ import type { RootState } from 'app/store/store';
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import type { GenerationMode } from 'features/controlLayers/store/types';
 import type { Graph } from 'features/nodes/util/graph/generation/Graph';
-import type { Invocation } from 'services/api/types';
+import type { ImageDTO, Invocation } from 'services/api/types';
 
 export type ImageOutputNodes =
   | 'l2i'
@@ -17,7 +17,8 @@ export type ImageOutputNodes =
   | 'cogview4_l2i'
   | 'qwen_image_l2i'
   | 'z_image_l2i'
-  | 'anima_l2i';
+  | 'anima_l2i'
+  | 'fal_generate';
 
 export type LatentToImageNodes =
   | 'l2i'
@@ -66,6 +67,8 @@ export type GraphBuilderArg = {
   generationMode: GenerationMode;
   state: RootState;
   manager: CanvasManager | null;
+  /** Pre-composited canvas ImageDTO (already flattened + downscaled). Used by External API path. */
+  preCompositedCanvas?: ImageDTO;
 };
 
 export type GraphBuilderReturn = {
@@ -78,6 +81,13 @@ export type GraphBuilderReturn = {
 export class UnsupportedGenerationModeError extends Error {
   constructor(message: string) {
     super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+export class GenerationCancelledError extends Error {
+  constructor() {
+    super('Generation cancelled by user');
     this.name = this.constructor.name;
   }
 }
