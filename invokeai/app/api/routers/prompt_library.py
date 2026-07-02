@@ -76,9 +76,13 @@ class SystemPromptEntry(BaseModel):
     id: str = Field(description="Unique identifier")
     name: str = Field(description="User-editable display name")
     system_prompt: str = Field(description="The system prompt text")
-    category: str = Field(default="optimize", description="Category: 'optimize' for prompt optimization, 'describe' for image description")
+    category: str = Field(
+        default="optimize", description="Category: 'optimize' for prompt optimization, 'describe' for image description"
+    )
     is_default: bool = Field(default=False, description="Whether this is a built-in prompt (cannot be deleted)")
-    is_locked: bool = Field(default=False, description="Whether the prompt is locked (read-only, prevents accidental edits)")
+    is_locked: bool = Field(
+        default=False, description="Whether the prompt is locked (read-only, prevents accidental edits)"
+    )
     created_at: str = Field(description="ISO timestamp of creation")
     updated_at: str = Field(description="ISO timestamp of last update")
 
@@ -345,7 +349,9 @@ async def refine_prompt(
         "You are a meta-prompt engineer. Your task is to improve a system prompt that is used to optimize "
         "AI image generation prompts. Output ONLY the improved system prompt text, nothing else."
     )
-    user_message = f"Current system prompt:\n---\n{body.system_prompt}\n---\n\nRefinement instruction: {body.instruction}"
+    user_message = (
+        f"Current system prompt:\n---\n{body.system_prompt}\n---\n\nRefinement instruction: {body.instruction}"
+    )
     if body.reference_prompt:
         user_message += f"\n\nFor reference, here is the default system prompt template to use as a structural guide:\n---\n{body.reference_prompt}\n---"
 

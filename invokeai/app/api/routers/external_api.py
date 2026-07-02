@@ -44,7 +44,9 @@ class ProviderStatus(BaseModel):
     display_name: str = Field(description="Human-readable provider name")
     is_configured: bool = Field(description="Whether an API key is set")
     is_available: bool = Field(default=False, description="Whether the provider implementation is registered")
-    capability_type: str = Field(default="image", description="What this provider can do: 'image', 'text', or 'image_text'")
+    capability_type: str = Field(
+        default="image", description="What this provider can do: 'image', 'text', or 'image_text'"
+    )
 
 
 class ProviderListResponse(BaseModel):
@@ -60,9 +62,13 @@ class ModelWithCapabilities(BaseModel):
     name: str = Field(description="Display name")
     provider_id: str = Field(description="Provider serving this model")
     description: str = Field(default="", description="Model description")
-    capabilities: Optional[ProviderCapabilities] = Field(default=None, description="Provider capabilities for this model")
+    capabilities: Optional[ProviderCapabilities] = Field(
+        default=None, description="Provider capabilities for this model"
+    )
     is_dynamic: bool = Field(default=False, description="Whether this is a dynamic endpoint with cached schema")
-    cached_schema: Optional[dict] = Field(default=None, description="JSON Schema for dynamic settings UI (only for dynamic endpoints)")
+    cached_schema: Optional[dict] = Field(
+        default=None, description="JSON Schema for dynamic settings UI (only for dynamic endpoints)"
+    )
 
 
 class ModelListResponse(BaseModel):

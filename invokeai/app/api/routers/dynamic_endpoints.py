@@ -53,8 +53,12 @@ class DynamicEndpointListResponse(BaseModel):
 class AddEndpointRequest(BaseModel):
     """Request to add a new dynamic endpoint."""
 
-    endpoint_input: str = Field(description="Model slug or full URL, e.g. 'fal-ai/flux-2-pro' or 'https://fal.ai/models/fal-ai/flux-2-pro'")
-    provider_hint: Optional[Literal["fal", "replicate"]] = Field(default=None, description="Optional provider override for ambiguous slugs")
+    endpoint_input: str = Field(
+        description="Model slug or full URL, e.g. 'fal-ai/flux-2-pro' or 'https://fal.ai/models/fal-ai/flux-2-pro'"
+    )
+    provider_hint: Optional[Literal["fal", "replicate"]] = Field(
+        default=None, description="Optional provider override for ambiguous slugs"
+    )
 
 
 class RenameEndpointRequest(BaseModel):
@@ -326,8 +330,7 @@ def _resolve_refs(node: dict, definitions: dict, _seen: set[str] | None = None) 
             result[key] = _resolve_refs(value, definitions, _seen)
         elif isinstance(value, list):
             result[key] = [
-                _resolve_refs(item, definitions, _seen) if isinstance(item, dict) else item
-                for item in value
+                _resolve_refs(item, definitions, _seen) if isinstance(item, dict) else item for item in value
             ]
         else:
             result[key] = value

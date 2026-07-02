@@ -166,7 +166,9 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
                     pil_images.append(context.images.get_pil(img_field.image_name))
                 except (ImageFileNotFoundException, ImageRecordNotFoundException, FileNotFoundError):
                     missing_names.append(img_field.image_name)
-                    logger.warning(f"Dynamic image '{img_field.image_name}' for field '{field_name}' not found, skipping.")
+                    logger.warning(
+                        f"Dynamic image '{img_field.image_name}' for field '{field_name}' not found, skipping."
+                    )
             if not pil_images and missing_names:
                 raise RuntimeError(
                     f"All images for required field '{field_name}' are missing from disk. "
@@ -267,14 +269,24 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
         if is_edit and not ref_images:
             # Canvas composite alone is a valid edit source — if somehow nothing was sent,
             # fall back to generate behavior rather than erroring
-            context.util.signal_progress("No reference images for edit mode, falling back to generate...", percentage=0.1)
+            context.util.signal_progress(
+                "No reference images for edit mode, falling back to generate...", percentage=0.1
+            )
             is_edit = False
 
         # Run the async provider call from this sync invocation context
         results = asyncio.run(
             self._dispatch(
-                provider, is_edit, prompt, self.model_id, ref_images, params,
-                api_key, progress_cb, params.num_images, capabilities.max_images_per_call,
+                provider,
+                is_edit,
+                prompt,
+                self.model_id,
+                ref_images,
+                params,
+                api_key,
+                progress_cb,
+                params.num_images,
+                capabilities.max_images_per_call,
                 dynamic_images,
             )
         )
