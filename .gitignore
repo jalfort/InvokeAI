@@ -190,3 +190,7 @@ installer/InvokeAI-Installer/
 
 # Weblate configuration file
 weblate.ini
+
+# External-API runtime data (written to InvokeAI root_path at runtime)
+/dynamic_endpoints.json
+/prompt_library.json

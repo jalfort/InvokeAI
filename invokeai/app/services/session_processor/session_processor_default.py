@@ -1,11 +1,12 @@
 import gc
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
-from threading import BoundedSemaphore, Thread
+from threading import BoundedSemaphore, Lock, Thread
 from threading import Event as ThreadEvent
 from typing import Optional
 
-from invokeai.app.invocations.baseinvocation import BaseInvocation, BaseInvocationOutput
+from invokeai.app.invocations.baseinvocation import BaseInvocation, BaseInvocationOutput, Bottleneck
 from invokeai.app.services.events.events_common import (
     BatchEnqueuedEvent,
     FastAPIEvent,
@@ -305,6 +306,32 @@ class DefaultSessionRunner(SessionRunnerBase):
             )
 
 
+def _classify_session(queue_item: SessionQueueItem) -> Bottleneck:
+    """Classify a session as Network or GPU based on its invocation nodes.
+
+    A session is Network if ANY node is network-bound (external API calls don't use GPU).
+    Returns Bottleneck.GPU only if all nodes are GPU-bound.
+    """
+    import logging
+
+    log = logging.getLogger("InvokeAI")
+    nodes = queue_item.session.graph.nodes
+    if not nodes:
+        return Bottleneck.GPU
+
+    has_network = False
+    for node_id, node in nodes.items():
+        node_type = node.get_type() if hasattr(node, "get_type") else type(node).__name__
+        node_bottleneck = getattr(node, "bottleneck", Bottleneck.GPU)
+        log.debug(f"Session {queue_item.session_id} node {node_id}: type={node_type}, bottleneck={node_bottleneck}")
+        if node_bottleneck == Bottleneck.Network:
+            has_network = True
+
+    result = Bottleneck.Network if has_network else Bottleneck.GPU
+    log.info(f"Session {queue_item.session_id} classified as {result.value} ({len(nodes)} nodes)")
+    return result
+
+
 class DefaultSessionProcessor(SessionProcessorBase):
     def __init__(
         self,
@@ -312,6 +339,7 @@ class DefaultSessionProcessor(SessionProcessorBase):
         on_non_fatal_processor_error_callbacks: Optional[list[OnNonFatalProcessorError]] = None,
         thread_limit: int = 1,
         polling_interval: int = 1,
+        network_concurrency: int = 4,
     ) -> None:
         super().__init__()
 
@@ -319,16 +347,24 @@ class DefaultSessionProcessor(SessionProcessorBase):
         self._on_non_fatal_processor_error_callbacks = on_non_fatal_processor_error_callbacks or []
         self._thread_limit = thread_limit
         self._polling_interval = polling_interval
+        self._network_concurrency = network_concurrency
 
     def start(self, invoker: Invoker) -> None:
         self._invoker: Invoker = invoker
-        self._queue_item: Optional[SessionQueueItem] = None
+
+        # GPU session tracking (scalar — only one GPU session runs at a time)
+        self._gpu_queue_item: Optional[SessionQueueItem] = None
         self._invocation: Optional[BaseInvocation] = None
+
+        # Network session tracking (dict — multiple can run concurrently)
+        # Maps item_id → (queue_item, per-session cancel_event)
+        self._active_network_items: dict[int, tuple[SessionQueueItem, ThreadEvent]] = {}
+        self._active_network_lock = Lock()
 
         self._resume_event = ThreadEvent()
         self._stop_event = ThreadEvent()
         self._poll_now_event = ThreadEvent()
-        self._cancel_event = ThreadEvent()
+        self._cancel_event = ThreadEvent()  # Used for GPU sessions only
 
         register_events(QueueClearedEvent, self._on_queue_cleared)
         register_events(BatchEnqueuedEvent, self._on_batch_enqueued)
@@ -336,8 +372,9 @@ class DefaultSessionProcessor(SessionProcessorBase):
 
         self._thread_semaphore = BoundedSemaphore(self._thread_limit)
 
-        # If profiling is enabled, create a profiler. The same profiler will be used for all sessions. Internally,
-        # the profiler will create a new profile for each session.
+        # If profiling is enabled, create a profiler. The same profiler will be used for all GPU sessions. Internally,
+        # the profiler will create a new profile for each session. Network sessions skip profiling (the Profiler is
+        # not thread-safe across concurrent sessions).
         self._profiler = (
             Profiler(
                 logger=self._invoker.services.logger,
@@ -348,7 +385,15 @@ class DefaultSessionProcessor(SessionProcessorBase):
             else None
         )
 
+        # GPU runner: single shared instance (unchanged from original behavior)
         self.session_runner.start(services=invoker.services, cancel_event=self._cancel_event, profiler=self._profiler)
+
+        # Network session thread pool — network-bound sessions run concurrently here.
+        self._network_pool = ThreadPoolExecutor(
+            max_workers=self._network_concurrency,
+            thread_name_prefix="network_session",
+        )
+
         self._thread = Thread(
             name="session_processor",
             target=self._process,
@@ -364,11 +409,16 @@ class DefaultSessionProcessor(SessionProcessorBase):
 
     def stop(self, *args, **kwargs) -> None:
         self._stop_event.set()
-        # Cancel any in-progress generation so that long-running nodes (e.g. denoising) stop at
+        # Cancel any in-progress GPU generation so that long-running nodes (e.g. denoising) stop at
         # the next step boundary instead of running to completion. Without this, the generation
         # thread may still be executing CUDA operations when Python teardown begins, which can
         # cause a C++ std::terminate() crash ("terminate called without an active exception").
         self._cancel_event.set()
+        # Cancel all active network sessions so pool threads can finish, then shut the pool down.
+        with self._active_network_lock:
+            for _item, cancel_ev in self._active_network_items.values():
+                cancel_ev.set()
+        self._network_pool.shutdown(wait=True, cancel_futures=False)
         # Wake the thread if it is sleeping in poll_now_event.wait() or blocked in resume_event.wait() (paused).
         self._poll_now_event.set()
         self._resume_event.set()
@@ -377,28 +427,52 @@ class DefaultSessionProcessor(SessionProcessorBase):
         self._poll_now_event.set()
 
     async def _on_queue_cleared(self, event: FastAPIEvent[QueueClearedEvent]) -> None:
-        if self._queue_item and self._queue_item.queue_id == event[1].queue_id:
+        queue_id = event[1].queue_id
+
+        # Cancel GPU session if it matches the cleared queue
+        if self._gpu_queue_item and self._gpu_queue_item.queue_id == queue_id:
             self._cancel_event.set()
-            self._poll_now()
+
+        # Cancel all active network sessions in that queue
+        with self._active_network_lock:
+            for _item, cancel_ev in self._active_network_items.values():
+                if _item.queue_id == queue_id:
+                    cancel_ev.set()
+
+        self._poll_now()
 
     async def _on_batch_enqueued(self, event: FastAPIEvent[BatchEnqueuedEvent]) -> None:
         self._poll_now()
 
     async def _on_queue_item_status_changed(self, event: FastAPIEvent[QueueItemStatusChangedEvent]) -> None:
-        # Make sure the cancel event is for the currently processing queue item
-        if self._queue_item and self._queue_item.item_id != event[1].item_id:
+        item_id = event[1].item_id
+        status = event[1].status
+
+        # Check GPU session
+        if self._gpu_queue_item and self._gpu_queue_item.item_id == item_id:
+            if status in ["completed", "failed", "canceled"]:
+                # When the queue item is canceled via HTTP, the queue item status is set to `"canceled"` and this
+                # event is emitted. We need to respond to this event and stop graph execution. This is done by
+                # setting the cancel event, which the session runner checks between invocations. If set, the session
+                # runner loop is broken.
+                #
+                # Long-running nodes that cannot be interrupted easily present a challenge. `denoise_latents` is one
+                # such node, but it gets a step callback, called on each step of denoising. This callback checks if
+                # the queue item is canceled, and if it is, raises a `CanceledException` to stop execution immediately.
+                if status == "canceled":
+                    self._cancel_event.set()
+                self._poll_now()
             return
-        if self._queue_item and event[1].status in ["completed", "failed", "canceled"]:
-            # When the queue item is canceled via HTTP, the queue item status is set to `"canceled"` and this event is
-            # emitted. We need to respond to this event and stop graph execution. This is done by setting the cancel
-            # event, which the session runner checks between invocations. If set, the session runner loop is broken.
-            #
-            # Long-running nodes that cannot be interrupted easily present a challenge. `denoise_latents` is one such
-            # node, but it gets a step callback, called on each step of denoising. This callback checks if the queue item
-            # is canceled, and if it is, raises a `CanceledException` to stop execution immediately.
-            if event[1].status == "canceled":
-                self._cancel_event.set()
-            self._poll_now()
+
+        # Check network sessions
+        with self._active_network_lock:
+            entry = self._active_network_items.get(item_id)
+        if entry is not None:
+            _item, cancel_ev = entry
+            if status in ["completed", "failed", "canceled"]:
+                if status == "canceled":
+                    cancel_ev.set()
+                self._poll_now()
 
     def resume(self) -> SessionProcessorStatus:
         if not self._resume_event.is_set():
@@ -411,10 +485,49 @@ class DefaultSessionProcessor(SessionProcessorBase):
         return self.get_status()
 
     def get_status(self) -> SessionProcessorStatus:
+        with self._active_network_lock:
+            has_network = bool(self._active_network_items)
         return SessionProcessorStatus(
             is_started=self._resume_event.is_set(),
-            is_processing=self._queue_item is not None,
+            is_processing=self._gpu_queue_item is not None or has_network,
         )
+
+    def _run_network_session(
+        self,
+        queue_item: SessionQueueItem,
+        cancel_event: ThreadEvent,
+    ) -> None:
+        """Run a network-bound session in a pool thread.
+
+        Creates a fresh DefaultSessionRunner per session for thread isolation.
+        Mirrors the GPU session error handling and cleanup logic.
+        """
+        runner = DefaultSessionRunner()
+        runner.start(
+            services=self._invoker.services,
+            cancel_event=cancel_event,
+            profiler=None,  # Profiler is not thread-safe across concurrent sessions
+        )
+        try:
+            self._invoker.services.logger.info(
+                f"[Network] Executing queue item {queue_item.item_id}, session {queue_item.session_id}"
+            )
+            cancel_event.clear()
+            runner.run(queue_item=queue_item)
+        except Exception as e:
+            error_type = e.__class__.__name__
+            error_message = str(e)
+            error_traceback = traceback.format_exc()
+            self._on_non_fatal_processor_error(
+                queue_item=queue_item,
+                error_type=error_type,
+                error_message=error_message,
+                error_traceback=error_traceback,
+            )
+        finally:
+            with self._active_network_lock:
+                self._active_network_items.pop(queue_item.item_id, None)
+            self._poll_now()
 
     def _process(
         self,
@@ -423,6 +536,9 @@ class DefaultSessionProcessor(SessionProcessorBase):
         resume_event: ThreadEvent,
         cancel_event: ThreadEvent,
     ):
+        # Local ref for the current queue item in error handling scope
+        queue_item: Optional[SessionQueueItem] = None
+
         try:
             # Any unhandled exception in this block is a fatal processor error and will stop the processor.
             self._thread_semaphore.acquire()
@@ -438,38 +554,65 @@ class DefaultSessionProcessor(SessionProcessorBase):
                     resume_event.wait()
 
                     # Get the next session to process
-                    self._queue_item = self._invoker.services.session_queue.dequeue()
+                    queue_item = self._invoker.services.session_queue.dequeue()
 
-                    if self._queue_item is None:
+                    if queue_item is None:
                         # The queue was empty, wait for next polling interval or event to try again
                         self._invoker.services.logger.debug("Waiting for next polling interval or event")
                         poll_now_event.wait(self._polling_interval)
                         continue
 
-                    # GC-ing here can reduce peak memory usage of the invoke process by freeing allocated memory blocks.
-                    # Most queue items take seconds to execute, so the relative cost of a GC is very small.
-                    # Python will never cede allocated memory back to the OS, so anything we can do to reduce the peak
-                    # allocation is well worth it.
-                    gc.collect()
+                    # Classify session: network-bound sessions run concurrently in a thread pool,
+                    # GPU-bound sessions block the main thread (as before).
+                    bottleneck = _classify_session(queue_item)
 
-                    self._invoker.services.logger.info(
-                        f"Executing queue item {self._queue_item.item_id}, session {self._queue_item.session_id}"
-                    )
-                    cancel_event.clear()
+                    if bottleneck == Bottleneck.Network:
+                        # Register before submitting so event handlers can find it immediately
+                        session_cancel_event = ThreadEvent()
+                        with self._active_network_lock:
+                            self._active_network_items[queue_item.item_id] = (queue_item, session_cancel_event)
 
-                    # Run the graph
-                    self.session_runner.run(queue_item=self._queue_item)
+                        self._network_pool.submit(
+                            self._run_network_session,
+                            queue_item,
+                            session_cancel_event,
+                        )
+                        # Do NOT block — loop back immediately to dequeue the next item
+                        continue
+
+                    else:
+                        # GPU session: block the main thread (unchanged from original behavior)
+                        self._gpu_queue_item = queue_item
+
+                        # GC-ing here can reduce peak memory usage of the invoke process by freeing allocated memory
+                        # blocks. Most queue items take seconds to execute, so the relative cost of a GC is very small.
+                        # Python will never cede allocated memory back to the OS, so anything we can do to reduce the
+                        # peak allocation is well worth it. Network sessions skip GC since they don't use GPU memory.
+                        gc.collect()
+
+                        self._invoker.services.logger.info(
+                            f"[GPU] Executing queue item {queue_item.item_id}, session {queue_item.session_id}"
+                        )
+                        cancel_event.clear()
+
+                        try:
+                            # Run the graph — blocks until the entire session completes
+                            self.session_runner.run(queue_item=queue_item)
+                        finally:
+                            self._gpu_queue_item = None
 
                 except Exception as e:
                     error_type = e.__class__.__name__
                     error_message = str(e)
                     error_traceback = traceback.format_exc()
                     self._on_non_fatal_processor_error(
-                        queue_item=self._queue_item,
+                        queue_item=queue_item,
                         error_type=error_type,
                         error_message=error_message,
                         error_traceback=error_traceback,
                     )
+                    # Ensure GPU state is cleaned up if error happened mid-GPU-session
+                    self._gpu_queue_item = None
                     # Wait for next polling interval or event to try again
                     poll_now_event.wait(self._polling_interval)
                     continue
@@ -484,7 +627,7 @@ class DefaultSessionProcessor(SessionProcessorBase):
         finally:
             stop_event.clear()
             poll_now_event.clear()
-            self._queue_item = None
+            self._gpu_queue_item = None
             self._thread_semaphore.release()
 
     def _on_non_fatal_processor_error(

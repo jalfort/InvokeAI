@@ -85,6 +85,11 @@ dependencies = [
   "requests",
   "semver~=3.0.1",
   "PyWavelets",
+
+  # External-API image/text providers (lazy-imported; anthropic/replicate/openrouter use requests/httpx).
+  "fal-client",
+  "google-genai>=1.65.0",
+  "openai>=1.0.0",
 ]
 
 [project.optional-dependencies]

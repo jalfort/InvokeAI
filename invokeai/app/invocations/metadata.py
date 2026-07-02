@@ -174,6 +174,8 @@ GENERATION_MODES = Literal[
     "anima_img2img",
     "anima_inpaint",
     "anima_outpaint",
+    "external_api_generate",
+    "external_api_edit",
 ]
 
 

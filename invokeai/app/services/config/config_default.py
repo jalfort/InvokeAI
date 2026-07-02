@@ -115,6 +115,8 @@ class InvokeAIAppConfig(BaseSettings):
         allow_unknown_models: Allow installation of models that we are unable to identify. If enabled, models will be marked as `unknown` in the database, and will not have any metadata associated with them. If disabled, unknown models will be rejected during installation.
         multiuser: Enable multiuser support. When disabled, the application runs in single-user mode using a default system account with administrator privileges. When enabled, requires user authentication and authorization.
         strict_password_checking: Enforce strict password requirements. When True, passwords must contain uppercase, lowercase, and numbers. When False (default), any password is accepted but its strength (weak/moderate/strong) is reported to the user.
+        api_keys: API keys for external providers, keyed by provider_id (e.g. {'fal': 'xxx', 'gemini': 'yyy'}).
+        fal_api_key: (Deprecated) API key for FAL.ai. Use api_keys instead. Kept for backward compatibility.
     """
 
     _root: Optional[Path] = PrivateAttr(default=None)
@@ -214,6 +216,10 @@ class InvokeAIAppConfig(BaseSettings):
     multiuser:                     bool = Field(default=False,              description="Enable multiuser support. When disabled, the application runs in single-user mode using a default system account with administrator privileges. When enabled, requires user authentication and authorization.")
     strict_password_checking:      bool = Field(default=False,              description="Enforce strict password requirements. When True, passwords must contain uppercase, lowercase, and numbers. When False (default), any password is accepted but its strength (weak/moderate/strong) is reported to the user.")
 
+    # EXTERNAL API
+    api_keys:            dict[str, str] = Field(default_factory=dict,       description="API keys for external providers, keyed by provider_id (e.g. {'fal': 'xxx', 'gemini': 'yyy'}).")
+    fal_api_key:        Optional[str] = Field(default=None,                 description="(Deprecated) API key for FAL.ai. Use api_keys instead. Kept for backward compatibility.")
+
     # fmt: on
 
     model_config = SettingsConfigDict(env_prefix="INVOKEAI_", env_ignore_empty=True)
@@ -261,7 +267,7 @@ class InvokeAIAppConfig(BaseSettings):
                 exclude_unset=False if as_example else True,
                 exclude_defaults=False if as_example else True,
                 exclude_none=True if as_example else False,
-                exclude={"schema_version", "legacy_models_yaml_path"},
+                exclude={"schema_version", "legacy_models_yaml_path", "fal_api_key"},
             )
 
             if as_example:
@@ -470,6 +476,13 @@ def migrate_v4_0_2_to_4_0_3_config_dict(config_dict: dict[str, Any]) -> dict[str
         A config dict with the settings migrated to v4.0.3.
     """
     parsed_config_dict: dict[str, Any] = copy.deepcopy(config_dict)
+    # Migrate fal_api_key into unified api_keys dict
+    fal_key = parsed_config_dict.pop("fal_api_key", None)
+    api_keys: dict[str, str] = parsed_config_dict.get("api_keys", {})
+    if fal_key and "fal" not in api_keys:
+        api_keys["fal"] = fal_key
+    if api_keys:
+        parsed_config_dict["api_keys"] = api_keys
     parsed_config_dict["schema_version"] = "4.0.3"
     return parsed_config_dict
 
