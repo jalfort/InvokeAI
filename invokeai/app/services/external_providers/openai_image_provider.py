@@ -139,6 +139,8 @@ class OpenAIImageProvider(BaseProvider):
 
     provider_id = "openai_image"
     display_name = "OpenAI Image"
+    # Shares the single OpenAI credential with the text provider ("openai").
+    credential_id = "openai"
 
     def _resolve_common_kwargs(self, model_id: str, dynamic: dict) -> dict[str, Any]:
         """Assemble the size/quality/background kwargs shared by generate + edit.

@@ -71,6 +71,15 @@ class BaseProvider(ABC):
 
     provider_id: str
     display_name: str
+    # api_keys entry that holds this provider's credential. Defaults to provider_id.
+    # Override when several providers share one credential (e.g. the openai_image image
+    # provider reuses the "openai" text-provider key — one OpenAI credential for both).
+    credential_id: Optional[str] = None
+
+    @property
+    def api_key_name(self) -> str:
+        """The api_keys dict key under which this provider's credential is stored."""
+        return self.credential_id or self.provider_id
 
     @abstractmethod
     async def generate(

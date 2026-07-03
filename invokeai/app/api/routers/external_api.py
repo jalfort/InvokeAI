@@ -121,14 +121,18 @@ class TestKeyResponse(BaseModel):
 
 def _is_provider_configured(provider_id: str) -> bool:
     """Check if an API key is available for a given provider."""
-    config = get_config()
-    return bool(config.api_keys.get(provider_id))
+    return _get_provider_key(provider_id) is not None
 
 
 def _get_provider_key(provider_id: str) -> Optional[str]:
-    """Get the API key for a provider."""
+    """Get the API key for a provider, resolving shared-credential aliases.
+
+    Some providers share one credential (e.g. openai_image reuses the "openai" key),
+    so we look up the resolved credential name rather than the raw provider id.
+    """
     config = get_config()
-    return config.api_keys.get(provider_id) or None
+    credential_id = get_provider_registry().resolve_credential_id(provider_id)
+    return config.api_keys.get(credential_id) or None
 
 
 @external_api_router.get(
@@ -240,8 +244,10 @@ async def set_key(body: SetKeyRequest = Body(description="API key to set")) -> S
     """
     config = get_config()
 
-    # Store in unified api_keys dict
-    config.api_keys[body.provider] = body.api_key
+    # Store in unified api_keys dict under the resolved credential name so shared-key
+    # providers (e.g. openai_image → "openai") write to the same slot they read from.
+    credential_id = get_provider_registry().resolve_credential_id(body.provider)
+    config.api_keys[credential_id] = body.api_key
 
     if body.persist:
         config.write_file(config.config_file_path)
@@ -261,7 +267,8 @@ async def delete_key(body: DeleteKeyRequest = Body(description="Provider to dele
     Removes the key from the unified api_keys dict and persists the change to invokeai.yaml.
     """
     config = get_config()
-    config.api_keys.pop(body.provider, None)
+    credential_id = get_provider_registry().resolve_credential_id(body.provider)
+    config.api_keys.pop(credential_id, None)
     config.write_file(config.config_file_path)
     return DeleteKeyResponse(provider=body.provider, is_configured=False)
 

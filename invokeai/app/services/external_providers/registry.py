@@ -29,6 +29,16 @@ class ProviderRegistry:
         """Return all registered providers."""
         return list(self._providers.values())
 
+    def resolve_credential_id(self, provider_id: str) -> str:
+        """Return the api_keys name that holds the credential for a provider.
+
+        Most providers store their key under their own id, but some share one
+        credential (e.g. openai_image reuses "openai"). Falls back to the given
+        provider_id for unknown/unregistered providers.
+        """
+        provider = self._providers.get(provider_id)
+        return provider.api_key_name if provider is not None else provider_id
+
     def get_providers_for_model(self, model_id: str) -> list[BaseProvider]:
         """Return all providers that support a given model id."""
         result: list[BaseProvider] = []

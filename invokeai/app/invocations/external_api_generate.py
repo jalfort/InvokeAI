@@ -123,9 +123,11 @@ class ExternalApiGenerateInvocation(BaseInvocation, WithMetadata, WithBoard):
         """Resolve the API key for the selected provider."""
         config = get_config()
 
-        # Check unified api_keys dict
+        # Check unified api_keys dict. Resolve the credential name via the registry so
+        # providers that share a key (e.g. openai_image → "openai") find it.
         api_keys: dict[str, str] = config.api_keys
-        api_key = api_keys.get(self.provider_id)
+        credential_id = get_provider_registry().resolve_credential_id(self.provider_id)
+        api_key = api_keys.get(credential_id)
 
         # Legacy fallback for fal provider
         if not api_key and self.provider_id == "fal":
