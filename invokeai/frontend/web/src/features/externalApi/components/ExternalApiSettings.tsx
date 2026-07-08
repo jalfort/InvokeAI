@@ -84,10 +84,11 @@ const OUTPUT_FORMAT_OPTIONS: ComboboxOption[] = [
  * Fallback model options when backend hasn't registered providers yet.
  * Once providers register, model options come from the /models endpoint.
  */
+// Shown only before providers register (models come from /models thereafter). Selecting one
+// here does NOT change providerId, so these must match the default provider ("gemini").
 const FALLBACK_MODEL_OPTIONS: ComboboxOption[] = [
-  { value: 'fal-ai/nano-banana-pro', label: 'NanoBanana Pro' },
-  { value: 'fal-ai/flux-pro/kontext', label: 'Flux Kontext Pro' },
-  { value: 'fal-ai/flux-pro/kontext/max', label: 'Flux Kontext Max' },
+  { value: 'gemini-3-pro-image-preview', label: 'NanoBanana Pro' },
+  { value: 'gemini-3.1-flash-image-preview', label: 'NanoBanana 2 (Flash)' },
 ];
 
 const SORT_OPTIONS: ComboboxOption[] = [

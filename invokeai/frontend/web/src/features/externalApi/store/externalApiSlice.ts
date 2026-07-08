@@ -49,8 +49,8 @@ export type ExternalApiState = z.infer<typeof zExternalApiState>;
 const getInitialState = (): ExternalApiState => ({
   _version: 7,
   isEnabled: false,
-  providerId: 'fal',
-  modelId: 'fal-ai/nano-banana-pro',
+  providerId: 'gemini',
+  modelId: 'gemini-3-pro-image-preview',
   generationMode: 'generate',
   modeSource: 'user',
   aspectRatio: '1:1',

@@ -28,26 +28,6 @@ from invokeai.app.services.external_providers.base import (
 _STANDARD_ASPECT_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
 
 _MODEL_CONFIGS: dict[str, dict[str, Any]] = {
-    "gemini-2.5-flash-image": {
-        "response_modalities": ["IMAGE"],
-        "max_refs": 14,
-        "schema": {
-            "properties": {
-                "image_size": {
-                    "type": "string",
-                    "title": "Resolution",
-                    "enum": ["1K", "2K", "4K"],
-                    "default": "1K",
-                },
-                "aspect_ratio": {
-                    "type": "string",
-                    "title": "Aspect Ratio",
-                    "enum": _STANDARD_ASPECT_RATIOS,
-                    "default": "1:1",
-                },
-            },
-        },
-    },
     "gemini-3.1-flash-image-preview": {
         "response_modalities": ["IMAGE"],
         "max_refs": 14,
@@ -178,12 +158,6 @@ class GeminiProvider(BaseProvider):
 
     def get_supported_models(self) -> list[ModelInfo]:
         return [
-            ModelInfo(
-                id="gemini-2.5-flash-image",
-                name="NanoBanana (Flash)",
-                provider_id=self.provider_id,
-                description="Fast and efficient image generation. Supports 1K-4K resolution.",
-            ),
             ModelInfo(
                 id="gemini-3.1-flash-image-preview",
                 name="NanoBanana 2 (Flash)",

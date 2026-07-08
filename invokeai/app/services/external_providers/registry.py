@@ -94,7 +94,7 @@ def _register_builtin_providers() -> None:
     except ImportError:
         log.debug("Failed to load OpenAI provider")
 
-    # OpenAI image generation provider (gpt-image-1.5)
+    # OpenAI image generation provider (gpt-image-2)
     try:
         from invokeai.app.services.external_providers.openai_image_provider import OpenAIImageProvider
 

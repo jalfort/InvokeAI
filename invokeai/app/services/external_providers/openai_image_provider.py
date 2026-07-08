@@ -1,18 +1,16 @@
-"""OpenAI image generation provider (gpt-image-2 flagship + gpt-image-1.5).
+"""OpenAI image generation provider (gpt-image-2).
 
 Uses the OpenAI images API for text-to-image (/images/generations) and image
-editing (/images/edits). Each model has its own schema-driven settings panel.
+editing (/images/edits) with a schema-driven settings panel.
 
 Masking is handled "our way" — the invocation paints the masked region solid red
 on the source image (see `_apply_mask_annotation`) rather than using OpenAI's
 native mask param, so masking behaves identically across every provider. Hence
 `supports_masks=False` here.
 
-Key model differences (see docs/dev_api/openai-images-api-2026.md):
-- gpt-image-2: flagship. Arbitrary sizes (÷16, aspect 1:3–3:1, ≤3840x2160).
-  Always processes inputs at high fidelity → `input_fidelity` must be OMITTED
-  (the API rejects it with a 400).
-- gpt-image-1.5: prior gen. Supports `input_fidelity` (high|low) on edits.
+gpt-image-2 (see docs/dev_api/openai-images-api-2026.md): flagship model. Arbitrary
+sizes (÷16, aspect 1:3–3:1, ≤3840x2160). Always processes inputs at high fidelity →
+`input_fidelity` must be OMITTED (the API rejects it with a 400).
 """
 
 import asyncio
@@ -32,29 +30,25 @@ from invokeai.app.services.external_providers.base import (
     ProviderCapabilities,
 )
 
-# Models that accept the `input_fidelity` edit param. gpt-image-2 must OMIT it.
-_INPUT_FIDELITY_MODELS = {"gpt-image-1", "gpt-image-1.5", "gpt-image-1-mini"}
-
-# gpt-image-2 arbitrary-size constraints.
+# gpt-image-2 arbitrary-size constraints (per OpenAI Images API reference + prompting guide).
+# Orientation-free: limits are on the long/short edge and total pixel count, not per-axis, so
+# both 3840x2160 (landscape) and 2160x3840 (portrait) are valid.
 _SIZE_DIVISOR = 16
-_SIZE_MAX_W = 3840
-_SIZE_MAX_H = 2160
-_SIZE_MIN_ASPECT = 1 / 3  # width/height
-_SIZE_MAX_ASPECT = 3 / 1
+_SIZE_MAX_EDGE = 3840  # longest edge, either orientation
+_SIZE_MAX_PIXELS = 8_294_400  # 3840 * 2160
+_SIZE_MIN_PIXELS = 655_360
+_SIZE_MAX_ASPECT_RATIO = 3.0  # long edge / short edge (i.e. between 1:3 and 3:1)
+_SIZE_EXPERIMENTAL_PIXELS = 3_686_400  # >2560x1440 is experimental per OpenAI (advisory only)
 
 _SIZE_SCHEMA_GPT_IMAGE_2 = {
     "type": "string",
     "title": "Size",
-    # Presets for the dropdown; the provider also accepts any valid custom WIDTHxHEIGHT
-    # (÷16, aspect 1:3–3:1, ≤3840x2160) if the schema is switched to free-text.
-    "enum": ["auto", "1024x1024", "1536x1024", "1024x1536", "1536x1536", "2048x2048"],
+    # `allowCustom` tells the frontend to render an editable field (enum values become datalist
+    # suggestions, but any custom WIDTHxHEIGHT can be typed). The provider accepts any valid
+    # custom size (÷16, long edge ≤3840, 655,360–8,294,400 px, aspect 1:3–3:1) — see _validate_size.
+    "enum": ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160", "2160x3840"],
+    "allowCustom": True,
     "default": "auto",
-}
-_SIZE_SCHEMA_LEGACY = {
-    "type": "string",
-    "title": "Size",
-    "enum": ["1024x1024", "1024x1536", "1536x1024", "auto"],
-    "default": "1024x1024",
 }
 _QUALITY_SCHEMA = {
     "type": "string",
@@ -74,12 +68,6 @@ _MODERATION_SCHEMA = {
     "enum": ["auto", "low"],
     "default": "auto",
 }
-_INPUT_FIDELITY_SCHEMA = {
-    "type": "string",
-    "title": "Input Fidelity",
-    "enum": ["high", "low"],
-    "default": "high",
-}
 
 _MODEL_CONFIGS: dict[str, dict[str, Any]] = {
     "gpt-image-2": {
@@ -91,17 +79,6 @@ _MODEL_CONFIGS: dict[str, dict[str, Any]] = {
                 "moderation": _MODERATION_SCHEMA,
                 # NOTE: no input_fidelity — gpt-image-2 always processes inputs at high fidelity
                 # and rejects the param.
-            },
-        },
-    },
-    "gpt-image-1.5": {
-        "schema": {
-            "properties": {
-                "size": _SIZE_SCHEMA_LEGACY,
-                "quality": _QUALITY_SCHEMA,
-                "background": _BACKGROUND_SCHEMA,
-                "moderation": _MODERATION_SCHEMA,
-                "input_fidelity": _INPUT_FIDELITY_SCHEMA,
             },
         },
     },
@@ -122,10 +99,15 @@ def _validate_size(size: str) -> None:
     w, h = int(m.group(1)), int(m.group(2))
     if w % _SIZE_DIVISOR != 0 or h % _SIZE_DIVISOR != 0:
         raise ValueError(f"Size {size}: width and height must each be divisible by {_SIZE_DIVISOR}.")
-    if w > _SIZE_MAX_W or h > _SIZE_MAX_H:
-        raise ValueError(f"Size {size}: max is {_SIZE_MAX_W}x{_SIZE_MAX_H}.")
-    aspect = w / h
-    if aspect < _SIZE_MIN_ASPECT or aspect > _SIZE_MAX_ASPECT:
+    long_edge, short_edge = max(w, h), min(w, h)
+    if long_edge > _SIZE_MAX_EDGE:
+        raise ValueError(f"Size {size}: longest edge must be ≤ {_SIZE_MAX_EDGE}px.")
+    pixels = w * h
+    if pixels > _SIZE_MAX_PIXELS:
+        raise ValueError(f"Size {size}: total pixels must be ≤ {_SIZE_MAX_PIXELS:,} (e.g. 3840x2160).")
+    if pixels < _SIZE_MIN_PIXELS:
+        raise ValueError(f"Size {size}: total pixels must be ≥ {_SIZE_MIN_PIXELS:,} (e.g. 1024x1024 = 1,048,576).")
+    if long_edge / short_edge > _SIZE_MAX_ASPECT_RATIO:
         raise ValueError(f"Size {size}: aspect ratio must be between 1:3 and 3:1.")
 
 
@@ -244,8 +226,8 @@ class OpenAIImageProvider(BaseProvider):
     ) -> list[ImageResult]:
         """Call the OpenAI images/edits endpoint with PIL images.
 
-        `input_fidelity` is sent ONLY for models that support it (gpt-image-1/1.5);
-        gpt-image-2 omits it (the API rejects it with a 400).
+        gpt-image-2 processes inputs at high fidelity natively, so `input_fidelity`
+        is never sent (the API rejects it with a 400).
         """
         # Convert PIL images to PNG bytes for upload. Pass (filename, bytes, mimetype) tuples so the
         # multipart upload carries an image/png content-type — a raw BytesIO uploads as
@@ -256,16 +238,12 @@ class OpenAIImageProvider(BaseProvider):
             img.save(buf, format="PNG")
             image_files.append((f"image_{idx}.png", buf.getvalue(), "image/png"))
 
-        edit_kwargs: dict[str, Any] = dict(common)
-        if model_id in _INPUT_FIDELITY_MODELS:
-            edit_kwargs["input_fidelity"] = dynamic.get("input_fidelity", "high")
-
         response = await client.images.edit(
             model=model_id,
             image=image_files,
             prompt=prompt,
             n=min(num_images, 10),
-            **edit_kwargs,
+            **common,
         )
 
         if progress_cb:
@@ -371,11 +349,5 @@ class OpenAIImageProvider(BaseProvider):
                 provider_id=self.provider_id,
                 description="OpenAI's flagship image model (ChatGPT Images 2.0). Arbitrary sizes, "
                 "high-fidelity inputs, up to 16 reference images.",
-            ),
-            ModelInfo(
-                id="gpt-image-1.5",
-                name="GPT Image 1.5",
-                provider_id=self.provider_id,
-                description="Prior-generation OpenAI image model. Supports input fidelity control on edits.",
             ),
         ]

@@ -76,6 +76,8 @@ type SchemaProperty = {
   description?: string;
   default?: unknown;
   enum?: unknown[];
+  /** When true, render an editable field: enum values become datalist suggestions but any value can be typed. */
+  allowCustom?: boolean;
   minimum?: number;
   maximum?: number;
   exclusiveMinimum?: number;
@@ -327,6 +329,10 @@ const DynamicField = memo(({ fieldKey, prop, schema }: DynamicFieldProps) => {
   }
   // Determine field type
   if (prop.enum?.length) {
+    // Editable enum: preset suggestions via datalist, but any custom value can be typed.
+    if (prop.allowCustom) {
+      return <EditableEnumField fieldKey={fieldKey} prop={prop} />;
+    }
     return <EnumField fieldKey={fieldKey} prop={prop} />;
   }
   if (prop.type === 'boolean') {
@@ -507,6 +513,41 @@ const EnumField = memo(({ fieldKey, prop }: FieldProps) => {
 });
 
 EnumField.displayName = 'EnumField';
+
+/**
+ * Editable enum: a text input whose enum values are offered as `<datalist>` suggestions,
+ * while still allowing any custom value to be typed (e.g. a custom WIDTHxHEIGHT size).
+ * Uses Input + native datalist rather than a creatable combobox, which isn't themed here.
+ */
+const EditableEnumField = memo(({ fieldKey, prop }: FieldProps) => {
+  const dispatch = useAppDispatch();
+  const dynamicParams = useAppSelector(selectExternalApiDynamicParams);
+  const currentValue = (dynamicParams[fieldKey] as string) ?? (prop.default as string) ?? '';
+  const listId = `dynamic-datalist-${fieldKey}`;
+
+  const suggestions = useMemo(() => (prop.enum ?? []).map((v) => String(v)), [prop.enum]);
+
+  const onChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      dispatch(externalApiDynamicParamChanged({ key: fieldKey, value: e.target.value }));
+    },
+    [dispatch, fieldKey]
+  );
+
+  return (
+    <FormControl>
+      <FormLabel>{prop.title ?? formatLabel(fieldKey)}</FormLabel>
+      <Input value={currentValue} onChange={onChange} size="sm" list={listId} placeholder={prop.description ?? ''} />
+      <datalist id={listId}>
+        {suggestions.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+    </FormControl>
+  );
+});
+
+EditableEnumField.displayName = 'EditableEnumField';
 
 const BooleanField = memo(({ fieldKey, prop }: FieldProps) => {
   const dispatch = useAppDispatch();
