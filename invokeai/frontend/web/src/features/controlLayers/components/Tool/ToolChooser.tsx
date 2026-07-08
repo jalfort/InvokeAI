@@ -7,6 +7,8 @@ import { ToolLassoButton } from 'features/controlLayers/components/Tool/ToolLass
 import { ToolMoveButton } from 'features/controlLayers/components/Tool/ToolMoveButton';
 import { ToolShapesButton } from 'features/controlLayers/components/Tool/ToolShapesButton';
 import { ToolTextButton } from 'features/controlLayers/components/Tool/ToolTextButton';
+// FORK: JA toolbox drawer — fork-built canvas tools live under this one rail button. See features/controlLayers/fork/.
+import { JaToolboxButton } from 'features/controlLayers/fork/toolbox/JaToolboxButton';
 import React from 'react';
 
 import { ToolEraserButton } from './ToolEraserButton';
@@ -26,6 +28,8 @@ export const ToolChooser: React.FC = () => {
         <ToolViewButton />
         <ToolBboxButton />
         <ToolColorPickerButton />
+        {/* FORK: JA toolbox — selection / brushes / annotation drawer */}
+        <JaToolboxButton />
       </ButtonGroup>
     </>
   );

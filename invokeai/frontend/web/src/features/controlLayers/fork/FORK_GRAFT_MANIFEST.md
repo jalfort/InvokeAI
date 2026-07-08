@@ -1,0 +1,26 @@
+# FORK graft manifest
+
+Every edit to an **upstream file** made to bolt on fork canvas tools (P4). Each seam is
+tagged `// FORK:` in-code and listed here so it can be re-applied mechanically after an
+upstream merge. Fork-owned files under `controlLayers/fork/` are **not** listed — they
+never conflict. Paths are under `invokeai/frontend/web/src/`.
+
+| Status     | Upstream file                                                                                                                                                                                                                  | Seam                                                                                                | Why                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| ✅ live    | `features/controlLayers/components/Tool/ToolChooser.tsx`                                                                                                                                                                       | render `<JaToolboxButton/>` at end of the tool `ButtonGroup` (+ import)                             | mounts the JA toolbox drawer in the rail  |
+| ⏳ Phase A | `features/controlLayers/store/types.ts` (`_zTool` ~:109)                                                                                                                                                                       | add `'selection'`                                                                                   | selection tool enum value                 |
+| ⏳ Phase A | `features/controlLayers/konva/CanvasTool/CanvasToolModule.ts`                                                                                                                                                                  | register + group.add + clear-on-switch + cursor + pointer dispatch + keyboard/modifier block + repr | selection tool integration (largest seam) |
+| ⏳ Phase A | `features/controlLayers/konva/worker.ts` + `konva/CanvasWorkerModule.ts`                                                                                                                                                       | SDT compute + request plumbing                                                                      | feathering off the main thread            |
+| ⏳ Phase A | `features/controlLayers/konva/CanvasStageModule.ts`                                                                                                                                                                            | wheel-handler guard for S+scroll feather                                                            | live feather-radius adjust                |
+| ⏳ Phase A | `features/controlLayers/store/canvasSettingsSlice.ts`                                                                                                                                                                          | selection settings fields/reducers/selectors                                                        | mode / feather / overlay prefs            |
+| ⏳ Phase A | `features/system/components/HotkeysModal/useHotkeyData.ts`                                                                                                                                                                     | `addHotkey('canvas','selectSelectionTool',['s'])`                                                   | selection hotkey                          |
+| ⏳ Phase A | `features/controlLayers/components/Toolbar/CanvasToolbar.tsx` + `ui/layouts/CanvasWorkspacePanel.tsx`                                                                                                                          | mount selection settings + context-menu items                                                       | selection UI                              |
+| ⏳ Phase B | `_zTool`; `konva/CanvasEntity/CanvasEntityBufferObjectRenderer.ts` (:130 render branch, **:270 commitBuffer fix**, :294 commit switch); `konva/CanvasEntity/CanvasEntityObjectRenderer.ts` (needsPixelBbox); settings; hotkeys | soft + clone brush integration                                                                      |
+| ⏳ Phase C | `_zTool`; `features/nodes/util/graph/generation/buildExternalAPIGraph.ts` (:68 annotation-composite re-wire); `konva/CanvasCompositorModule.ts` (overlay helper); settings; hotkeys                                            | annotation directive overlay                                                                        |
+
+_Legend: ✅ applied · ⏳ planned (this phase). Line numbers are approximate — match by content._
+
+> **commitBuffer note (Phase B):** `CanvasEntityBufferObjectRenderer.ts:270` reads
+> `const { pushToState } = { ...options, pushToState: true }` — `pushToState` is always
+> true (latent upstream bug). When brush cases are added to the commit switch, re-apply
+> `{ pushToState: true, ...options }` or committed brush state double-pushes.
