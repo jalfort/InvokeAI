@@ -46,7 +46,17 @@ _SIZE_SCHEMA_GPT_IMAGE_2 = {
     # `allowCustom` tells the frontend to render an editable field (enum values become datalist
     # suggestions, but any custom WIDTHxHEIGHT can be typed). The provider accepts any valid
     # custom size (÷16, long edge ≤3840, 655,360–8,294,400 px, aspect 1:3–3:1) — see _validate_size.
-    "enum": ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160", "2160x3840"],
+    "enum": [
+        "auto",
+        "1024x1024",
+        "1536x1024",
+        "1024x1536",
+        "2048x2048",
+        "2048x1152",
+        "2576x1104",
+        "3840x2160",
+        "2160x3840",
+    ],
     "allowCustom": True,
     "default": "auto",
 }
