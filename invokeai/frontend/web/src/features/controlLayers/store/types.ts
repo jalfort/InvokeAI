@@ -106,7 +106,20 @@ const zIPMethodV2 = z.enum(['full', 'style', 'composition', 'style_strong', 'sty
 export type IPMethodV2 = z.infer<typeof zIPMethodV2>;
 export const isIPMethodV2 = (v: unknown): v is IPMethodV2 => zIPMethodV2.safeParse(v).success;
 
-const _zTool = z.enum(['brush', 'eraser', 'move', 'rect', 'lasso', 'gradient', 'view', 'bbox', 'colorPicker', 'text']);
+// FORK: 'selection' added for the JA toolbox selection tool (see controlLayers/fork/).
+const _zTool = z.enum([
+  'brush',
+  'eraser',
+  'move',
+  'rect',
+  'lasso',
+  'gradient',
+  'view',
+  'bbox',
+  'colorPicker',
+  'text',
+  'selection',
+]);
 export type Tool = z.infer<typeof _zTool>;
 
 const zPoints = z.array(z.number()).refine((points) => points.length % 2 === 0, {

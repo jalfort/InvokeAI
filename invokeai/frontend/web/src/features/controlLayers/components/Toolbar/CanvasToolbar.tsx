@@ -19,6 +19,8 @@ import { CanvasToolbarSaveToGalleryButton } from 'features/controlLayers/compone
 import { CanvasToolbarScale } from 'features/controlLayers/components/Toolbar/CanvasToolbarScale';
 import { CanvasToolbarSnapshotMenuButton } from 'features/controlLayers/components/Toolbar/CanvasToolbarSnapshotMenuButton';
 import { CanvasToolbarUndoButton } from 'features/controlLayers/components/Toolbar/CanvasToolbarUndoButton';
+// FORK: selection tool settings (JA toolbox)
+import { ToolSelectionSettings } from 'features/controlLayers/fork/selection/ToolSelectionSettings';
 import { useCanvasDeleteLayerHotkey } from 'features/controlLayers/hooks/useCanvasDeleteLayerHotkey';
 import { useCanvasEntityQuickSwitchHotkey } from 'features/controlLayers/hooks/useCanvasEntityQuickSwitchHotkey';
 import { useCanvasFilterHotkey } from 'features/controlLayers/hooks/useCanvasFilterHotkey';
@@ -40,6 +42,8 @@ export const CanvasToolbar = memo(() => {
   const isTextSelected = useToolIsSelected('text');
   const isLassoSelected = useToolIsSelected('lasso');
   const isGradientSelected = useToolIsSelected('gradient');
+  // FORK: selection tool (JA toolbox)
+  const isSelectionSelected = useToolIsSelected('selection');
   const showToolWithPicker = useMemo(() => {
     return !isTextSelected && (isBrushSelected || isEraserSelected);
   }, [isBrushSelected, isEraserSelected, isTextSelected]);
@@ -83,6 +87,8 @@ export const CanvasToolbar = memo(() => {
             </Box>
           </Box>
         )}
+        {/* FORK: selection tool settings (JA toolbox) */}
+        {isSelectionSelected && <ToolSelectionSettings />}
         {isTextSelected ? <TextToolOptions /> : showToolWithPicker && <ToolWidthPicker />}
       </ToolOptionsRowContainer>
       <Flex alignItems="center" h="full" flexGrow={1} flexShrink={0} justifyContent="flex-end" minW="fit-content">

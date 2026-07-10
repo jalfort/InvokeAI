@@ -2,7 +2,7 @@ import type { PayloadAction, Selector } from '@reduxjs/toolkit';
 import { createSelector, createSlice } from '@reduxjs/toolkit';
 import type { RootState } from 'app/store/store';
 import type { SliceConfig } from 'app/store/types';
-import type { RgbaColor } from 'features/controlLayers/store/types';
+import type { RgbaColor, RgbColor } from 'features/controlLayers/store/types';
 import { RGBA_BLACK, RGBA_WHITE, zRgbaColor } from 'features/controlLayers/store/types';
 import { z } from 'zod';
 
@@ -15,6 +15,11 @@ export type TransformSmoothingMode = z.infer<typeof zTransformSmoothingMode>;
 const zGradientType = z.enum(['linear', 'radial']);
 const zLassoMode = z.enum(['freehand', 'polygon']);
 const zShapeType = z.enum(['rect', 'oval', 'polygon', 'freehand']);
+// FORK: selection tool (JA toolbox)
+const zSelectionMode = z.enum(['rectangle', 'ellipse', 'lasso', 'polygon']);
+export type SelectionMode = z.infer<typeof zSelectionMode>;
+const zSelectionFeatherDirection = z.enum(['both', 'inward', 'outward']);
+export type SelectionFeatherDirection = z.infer<typeof zSelectionFeatherDirection>;
 
 const zCanvasSettingsState = z.object({
   /**
@@ -128,6 +133,33 @@ const zCanvasSettingsState = z.object({
    * The lasso tool mode.
    */
   lassoMode: zLassoMode.default('freehand'),
+  // FORK: selection tool (JA toolbox)
+  /**
+   * The selection tool shape mode.
+   */
+  selectionMode: zSelectionMode.default('rectangle'),
+  /**
+   * The feather radius for selection operations (0-100px).
+   */
+  selectionFeatherRadius: z.number().min(0).default(0),
+  /**
+   * The feather direction for selection operations.
+   */
+  selectionFeatherDirection: zSelectionFeatherDirection.default('both'),
+  /**
+   * The opacity of the selection overlay (0-1).
+   */
+  selectionOverlayOpacity: z.number().min(0).max(1).default(0.5),
+  /**
+   * The color of the selection overlay.
+   */
+  selectionOverlayColor: z
+    .object({
+      r: z.number().int().min(0).max(255),
+      g: z.number().int().min(0).max(255),
+      b: z.number().int().min(0).max(255),
+    })
+    .default({ r: 220, g: 40, b: 40 }),
 });
 
 type CanvasSettingsState = z.infer<typeof zCanvasSettingsState>;
@@ -160,6 +192,12 @@ const getInitialState = (): CanvasSettingsState => ({
   shapeType: 'rect',
   gradientClipEnabled: true,
   lassoMode: 'freehand',
+  // FORK: selection tool (JA toolbox)
+  selectionMode: 'rectangle',
+  selectionFeatherRadius: 0,
+  selectionFeatherDirection: 'both',
+  selectionOverlayOpacity: 0.5,
+  selectionOverlayColor: { r: 220, g: 40, b: 40 },
 });
 
 const slice = createSlice({
@@ -263,6 +301,31 @@ const slice = createSlice({
     settingsLassoModeChanged: (state, action: PayloadAction<CanvasSettingsState['lassoMode']>) => {
       state.lassoMode = action.payload;
     },
+    // FORK: selection tool (JA toolbox)
+    settingsSelectionModeChanged: (state, action: PayloadAction<CanvasSettingsState['selectionMode']>) => {
+      state.selectionMode = action.payload;
+    },
+    settingsSelectionFeatherRadiusChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['selectionFeatherRadius']>
+    ) => {
+      state.selectionFeatherRadius = action.payload;
+    },
+    settingsSelectionFeatherDirectionChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['selectionFeatherDirection']>
+    ) => {
+      state.selectionFeatherDirection = action.payload;
+    },
+    settingsSelectionOverlayOpacityChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['selectionOverlayOpacity']>
+    ) => {
+      state.selectionOverlayOpacity = action.payload;
+    },
+    settingsSelectionOverlayColorChanged: (state, action: PayloadAction<RgbColor>) => {
+      state.selectionOverlayColor = action.payload;
+    },
   },
 });
 
@@ -296,6 +359,12 @@ export const {
   settingsShapeTypeChanged,
   settingsGradientClipToggled,
   settingsLassoModeChanged,
+  // FORK: selection tool (JA toolbox)
+  settingsSelectionModeChanged,
+  settingsSelectionFeatherRadiusChanged,
+  settingsSelectionFeatherDirectionChanged,
+  settingsSelectionOverlayOpacityChanged,
+  settingsSelectionOverlayColorChanged,
 } = slice.actions;
 
 export const canvasSettingsSliceConfig: SliceConfig<typeof slice> = {
@@ -339,3 +408,14 @@ export const selectGradientType = createCanvasSettingsSelector((settings) => set
 export const selectShapeType = createCanvasSettingsSelector((settings) => settings.shapeType);
 export const selectGradientClipEnabled = createCanvasSettingsSelector((settings) => settings.gradientClipEnabled);
 export const selectLassoMode = createCanvasSettingsSelector((settings) => settings.lassoMode);
+
+// FORK: selection tool (JA toolbox)
+export const selectSelectionMode = createCanvasSettingsSelector((settings) => settings.selectionMode);
+export const selectSelectionFeatherRadius = createCanvasSettingsSelector((settings) => settings.selectionFeatherRadius);
+export const selectSelectionFeatherDirection = createCanvasSettingsSelector(
+  (settings) => settings.selectionFeatherDirection
+);
+export const selectSelectionOverlayOpacity = createCanvasSettingsSelector(
+  (settings) => settings.selectionOverlayOpacity
+);
+export const selectSelectionOverlayColor = createCanvasSettingsSelector((settings) => settings.selectionOverlayColor);

@@ -363,6 +363,10 @@ export class CanvasStageModule extends CanvasModuleBase {
 
   onStageMouseWheel = (e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
+    // FORK: don't zoom when the selection tool is using S+scroll to adjust feather radius (JA toolbox)
+    if (this.manager.tool.$tool.get() === 'selection' && this.manager.tool.tools.selection.$sKeyHeld.get()) {
+      return;
+    }
     if (this._snapTimeout !== null) {
       window.clearTimeout(this._snapTimeout);
     }

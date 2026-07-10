@@ -800,6 +800,10 @@
                 "title": "Color Picker Tool",
                 "desc": "Select the color picker tool."
             },
+            "selectSelectionTool": {
+                "title": "Selection Tool",
+                "desc": "Select the selection tool."
+            },
             "selectEraserTool": {
                 "title": "Eraser Tool",
                 "desc": "Select the eraser tool."
@@ -3011,7 +3015,8 @@
             "move": "Move",
             "view": "View",
             "colorPicker": "Color Picker",
-            "text": "Text"
+            "text": "Text",
+            "selection": "Selection"
         },
         "filter": {
             "filter": "Filter",

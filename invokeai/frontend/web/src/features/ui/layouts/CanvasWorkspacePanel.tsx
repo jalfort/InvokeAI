@@ -20,6 +20,8 @@ import { PinnedFillColorPickerOverlay } from 'features/controlLayers/components/
 import { CanvasToolbar } from 'features/controlLayers/components/Toolbar/CanvasToolbar';
 import { Transform } from 'features/controlLayers/components/Transform/Transform';
 import { CanvasManagerProviderGate } from 'features/controlLayers/contexts/CanvasManagerProviderGate';
+// FORK: selection tool context-menu ops (JA toolbox)
+import { CanvasContextMenuSelectionItems } from 'features/controlLayers/fork/selection/CanvasContextMenuSelectionItems';
 import { selectDynamicGrid, selectShowHUD } from 'features/controlLayers/store/canvasSettingsSlice';
 import { selectCanvasSessionId } from 'features/controlLayers/store/canvasStagingAreaSlice';
 import { memo, useCallback } from 'react';
@@ -32,6 +34,8 @@ const MenuContent = memo(() => {
     <CanvasManagerProviderGate>
       <MenuList>
         <CanvasContextMenuSelectedEntityMenuItems />
+        {/* FORK: selection tool ops (fill/delete/invert/undo/deselect) */}
+        <CanvasContextMenuSelectionItems />
         <CanvasContextMenuGlobalMenuItems />
       </MenuList>
     </CanvasManagerProviderGate>

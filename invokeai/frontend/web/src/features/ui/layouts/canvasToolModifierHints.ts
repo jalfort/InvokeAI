@@ -170,6 +170,8 @@ export const getCanvasToolModifierHintIds = ({
     view: () => ['altPickColor'],
     colorPicker: () => ['spacePan'],
     gradient: () => [...SHARED_HINT_IDS],
+    // FORK: selection tool (JA toolbox) — pan hint only; add/subtract/feather live in the settings UI.
+    selection: () => ['spacePan'],
     rect: ({ shapeType: st, isPrimaryPointerDown: pointerDown }) => {
       if (st === 'polygon') {
         return ['modErase', 'shiftSnap45Degrees', 'spacePan', 'altPickColor'];

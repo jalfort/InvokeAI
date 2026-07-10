@@ -119,6 +119,8 @@ export const buildHotkeysData = (t: HotkeyTranslator, customHotkeys: CustomHotke
   addHotkey('canvas', 'selectLassoTool', ['l']);
   addHotkey('canvas', 'selectViewTool', ['h']);
   addHotkey('canvas', 'selectColorPickerTool', ['i']);
+  // FORK: selection tool (JA toolbox)
+  addHotkey('canvas', 'selectSelectionTool', ['s']);
   addHotkey('canvas', 'setFillColorsToDefault', ['d']);
   addHotkey('canvas', 'toggleFillColor', ['x']);
   addHotkey('canvas', 'fitLayersToCanvas', ['mod+0']);

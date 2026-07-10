@@ -1,3 +1,5 @@
+// FORK: selection tool module lives under the fork/ path, not konva/CanvasTool/
+import { CanvasSelectionToolModule } from 'features/controlLayers/fork/selection/CanvasSelectionToolModule';
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
 import type { AnyObjectState } from 'features/controlLayers/konva/CanvasObject/types';
@@ -23,7 +25,11 @@ import {
   getIsPrimaryMouseDown,
   getPrefixedId,
 } from 'features/controlLayers/konva/util';
-import { selectCanvasSettingsSlice } from 'features/controlLayers/store/canvasSettingsSlice';
+import {
+  selectCanvasSettingsSlice,
+  // FORK: selection feather radius adjust via S+scroll
+  settingsSelectionFeatherRadiusChanged,
+} from 'features/controlLayers/store/canvasSettingsSlice';
 import { selectCanvasSlice } from 'features/controlLayers/store/selectors';
 import type {
   CanvasControlLayerState,
@@ -74,6 +80,8 @@ export class CanvasToolModule extends CanvasModuleBase {
     rect: CanvasShapeToolModule;
     lasso: CanvasLassoToolModule;
     gradient: CanvasGradientToolModule;
+    // FORK: selection tool
+    selection: CanvasSelectionToolModule;
     colorPicker: CanvasColorPickerToolModule;
     bbox: CanvasBboxToolModule;
     view: CanvasViewToolModule;
@@ -134,6 +142,8 @@ export class CanvasToolModule extends CanvasModuleBase {
       rect: new CanvasShapeToolModule(this),
       lasso: new CanvasLassoToolModule(this),
       gradient: new CanvasGradientToolModule(this),
+      // FORK: selection tool
+      selection: new CanvasSelectionToolModule(this),
       colorPicker: new CanvasColorPickerToolModule(this),
       bbox: new CanvasBboxToolModule(this),
       text: new CanvasTextToolModule(this),
@@ -153,6 +163,8 @@ export class CanvasToolModule extends CanvasModuleBase {
     this.konva.group.add(this.tools.text.konva.group);
     this.konva.group.add(this.tools.bbox.konva.group);
     this.konva.group.add(this.tools.lasso.konva.group);
+    // FORK: register selection overlay group
+    this.konva.group.add(this.tools.selection.konva.group);
 
     this.subscriptions.add(this.manager.stage.$stageAttrs.listen(this.render));
     this.subscriptions.add(this.manager.$isBusy.listen(this.render));
@@ -180,6 +192,10 @@ export class CanvasToolModule extends CanvasModuleBase {
         this.tools.rect.onToolChanged();
         this.tools.lasso.onToolChanged();
         void this.tools.text.onToolChanged();
+        // FORK: clear the selection overlay when switching away from the selection tool
+        if (previousTool === 'selection' && tool !== 'selection') {
+          this.tools.selection.clearSelection();
+        }
         this.render();
       })
     );
@@ -224,6 +240,9 @@ export class CanvasToolModule extends CanvasModuleBase {
       this.tools.text.syncCursorStyle();
     } else if (tool === 'lasso') {
       this.tools.lasso.syncCursorStyle();
+    } else if (tool === 'selection') {
+      // FORK: selection tool always shows crosshair regardless of entity state
+      this.tools.selection.syncCursorStyle();
     } else if (selectedEntityAdapter) {
       if (selectedEntityAdapter.$isDisabled.get()) {
         stage.setCursor('not-allowed');
@@ -259,6 +278,8 @@ export class CanvasToolModule extends CanvasModuleBase {
     this.tools.text.render();
     this.tools.bbox.render();
     this.tools.lasso.render();
+    // FORK: render selection overlay
+    this.tools.selection.render();
   };
 
   syncCursorPositions = () => {
@@ -454,6 +475,14 @@ export class CanvasToolModule extends CanvasModuleBase {
     try {
       this.$lastPointerType.set(e.evt.pointerType);
 
+      // FORK: selection is an ephemeral overlay and doesn't require getCanDraw()
+      if (this.$tool.get() === 'selection') {
+        this.$isPrimaryPointerDown.set(getIsPrimaryMouseDown(e));
+        this.syncCursorPositions();
+        this.tools.selection.onStagePointerDown(e);
+        return;
+      }
+
       if (!this.getCanDraw()) {
         return;
       }
@@ -496,6 +525,12 @@ export class CanvasToolModule extends CanvasModuleBase {
         this.tools.colorPicker.onStagePointerUp(e);
       }
 
+      // FORK: selection is an ephemeral overlay and doesn't require getCanDraw()
+      if (tool === 'selection') {
+        this.tools.selection.onStagePointerUp(e);
+        return;
+      }
+
       if (!this.getCanDraw()) {
         return;
       }
@@ -531,6 +566,12 @@ export class CanvasToolModule extends CanvasModuleBase {
         this.tools.colorPicker.onStagePointerMove(e);
       } else if (tool === 'text') {
         this.tools.text.onStagePointerMove(e);
+      }
+
+      // FORK: selection is an ephemeral overlay and doesn't require getCanDraw()
+      if (tool === 'selection') {
+        this.tools.selection.onStagePointerMove(e);
+        return;
       }
 
       if (!this.getCanDraw()) {
@@ -588,6 +629,23 @@ export class CanvasToolModule extends CanvasModuleBase {
 
   onStageMouseWheel = (e: KonvaEventObject<WheelEvent>) => {
     if (e.target !== this.konva.stage) {
+      return;
+    }
+
+    // FORK: S+scroll adjusts the selection feather radius (before getCanDraw since selection doesn't require it)
+    if (this.$tool.get() === 'selection' && this.tools.selection.$sKeyHeld.get()) {
+      e.evt.preventDefault();
+      const settings = this.manager.stateApi.getSettings();
+      const step = e.evt.ctrlKey || e.evt.metaKey ? 10 : 1;
+      let delta = e.evt.deltaY;
+      if (settings.invertScrollForToolWidth) {
+        delta = -delta;
+      }
+      const change = delta < 0 ? step : -step;
+      const current = settings.selectionFeatherRadius;
+      const newRadius = Math.max(0, Math.min(1024, current + change));
+      this.manager.stateApi.store.dispatch(settingsSelectionFeatherRadiusChanged(newRadius));
+      this.render();
       return;
     }
 
@@ -707,6 +765,68 @@ export class CanvasToolModule extends CanvasModuleBase {
       return;
     }
 
+    // FORK: --- Selection tool keyboard shortcuts ---
+    if (this.$tool.get() === 'selection') {
+      const sel = this.tools.selection;
+      const hasSelection = sel.hasSelection();
+
+      // D = draw sub-mode (prevent D → setFillColorsToDefault)
+      if ((e.key === 'd' || e.key === 'D') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        sel.$selectionSubMode.set('draw');
+        sel.syncCursorStyle();
+        e.stopImmediatePropagation();
+        return;
+      }
+
+      // M = move sub-mode (only when selection exists)
+      if ((e.key === 'm' || e.key === 'M') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && hasSelection) {
+        sel.$selectionSubMode.set('move');
+        sel.syncCursorStyle();
+        return;
+      }
+
+      // F = fill selection (prevent F → togglePanels)
+      if ((e.key === 'f' || e.key === 'F') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && hasSelection) {
+        void sel.fillSelection();
+        e.stopImmediatePropagation();
+        return;
+      }
+
+      // Delete/Backspace = delete selection content
+      if ((e.key === 'Delete' || e.key === 'Backspace') && hasSelection) {
+        void sel.deleteSelection();
+        return;
+      }
+
+      // Shift+I = invert selection
+      if ((e.key === 'i' || e.key === 'I') && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && hasSelection) {
+        sel.invertSelection();
+        return;
+      }
+
+      // Ctrl+Z = undo last sub-selection (only when stack has multiple entries)
+      if (
+        e.key === 'z' &&
+        (e.ctrlKey || e.metaKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        sel.$subSelections.get().length > 1
+      ) {
+        sel.undoLastSubSelection();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        return;
+      }
+
+      // FORK: Ctrl/Cmd+D = deselect (standard). The bare 'd' handler above requires no modifier, so no conflict.
+      if (e.key === 'd' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && hasSelection) {
+        sel.clearSelection();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        return;
+      }
+    }
+
     if (e.key === KEY_ESCAPE) {
       // Cancel shape drawing on escape
       e.preventDefault();
@@ -784,6 +904,11 @@ export class CanvasToolModule extends CanvasModuleBase {
 
     if (e.key === KEY_ALT) {
       const tool = this.$tool.get();
+      // FORK: don't switch to color picker when selection tool is active (Alt used for subtract)
+      if (tool === 'selection') {
+        e.preventDefault();
+        return;
+      }
       const shapeType = this.manager.stateApi.getSettings().shapeType;
       const hasActiveShapeDragSession = this.tools.rect.hasActiveDragSession();
       if (!shouldQuickSwitchToColorPickerOnAlt(tool, shapeType, hasActiveShapeDragSession)) {
@@ -826,10 +951,24 @@ export class CanvasToolModule extends CanvasModuleBase {
     }
 
     if (e.key === KEY_ALT) {
+      // FORK: don't revert if selection tool is active (Alt used for subtract)
+      if (this.$tool.get() === 'selection') {
+        return;
+      }
       // Revert the tool to the previous tool on alt key up
       e.preventDefault();
       e.stopPropagation();
       this.revertToolBuffer();
+      return;
+    }
+
+    // FORK: M release reverts the selection sub-mode from move back to draw
+    if ((e.key === 'm' || e.key === 'M') && this.$tool.get() === 'selection') {
+      const sel = this.tools.selection;
+      if (sel.$selectionSubMode.get() === 'move') {
+        sel.$selectionSubMode.set('draw');
+        sel.syncCursorStyle();
+      }
       return;
     }
   };
@@ -860,6 +999,8 @@ export class CanvasToolModule extends CanvasModuleBase {
         rect: this.tools.rect.repr(),
         lasso: this.tools.lasso.repr(),
         gradient: this.tools.gradient.repr(),
+        // FORK: selection tool
+        selection: this.tools.selection.repr(),
         bbox: this.tools.bbox.repr(),
         view: this.tools.view.repr(),
         move: this.tools.move.repr(),

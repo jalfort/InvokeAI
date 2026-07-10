@@ -1,7 +1,14 @@
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
 import { getPrefixedId } from 'features/controlLayers/konva/util';
-import type { Extents, ExtentsResult, GetBboxTask, WorkerLogMessage } from 'features/controlLayers/konva/worker';
+import type {
+  ComputeSdtTask,
+  Extents,
+  ExtentsResult,
+  GetBboxTask,
+  SdtResult,
+  WorkerLogMessage,
+} from 'features/controlLayers/konva/worker';
 import type { Logger } from 'roarr';
 
 export class CanvasWorkerModule extends CanvasModuleBase {
@@ -14,6 +21,11 @@ export class CanvasWorkerModule extends CanvasModuleBase {
 
   worker: Worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module', name: 'worker' });
   tasks: Map<string, { task: GetBboxTask; onComplete: (extents: Extents | null) => void }> = new Map();
+  // FORK: SDT tasks (selection feathering, JA toolbox)
+  sdtTasks: Map<
+    string,
+    { task: ComputeSdtTask; onComplete: (sdt: Float32Array, width: number, height: number) => void }
+  > = new Map();
 
   constructor(manager: CanvasManager) {
     super();
@@ -25,7 +37,7 @@ export class CanvasWorkerModule extends CanvasModuleBase {
 
     this.log.debug('Creating module');
 
-    this.worker.onmessage = (event: MessageEvent<ExtentsResult | WorkerLogMessage>) => {
+    this.worker.onmessage = (event: MessageEvent<ExtentsResult | SdtResult | WorkerLogMessage>) => {
       const { type, data } = event.data;
       if (type === 'log') {
         if (data.ctx) {
@@ -40,6 +52,14 @@ export class CanvasWorkerModule extends CanvasModuleBase {
         }
         task.onComplete(data.extents);
         this.tasks.delete(data.id);
+        // FORK: SDT result (selection feathering)
+      } else if (type === 'sdt') {
+        const task = this.sdtTasks.get(data.id);
+        if (!task) {
+          return;
+        }
+        task.onComplete(new Float32Array(data.sdt), data.width, data.height);
+        this.sdtTasks.delete(data.id);
       }
     };
     this.worker.onerror = (event) => {
@@ -60,12 +80,26 @@ export class CanvasWorkerModule extends CanvasModuleBase {
     this.worker.postMessage(task, [data.buffer]);
   }
 
+  // FORK: SDT request (selection feathering, JA toolbox)
+  requestSdt(
+    data: Omit<ComputeSdtTask['data'], 'id'>,
+    onComplete: (sdt: Float32Array, width: number, height: number) => void
+  ) {
+    const id = getPrefixedId('sdt_calculation');
+    const task: ComputeSdtTask = {
+      type: 'compute_sdt',
+      data: { ...data, id },
+    };
+    this.sdtTasks.set(id, { task, onComplete });
+    this.worker.postMessage(task, [data.buffer]);
+  }
+
   repr = () => {
     return {
       id: this.id,
       type: this.type,
       path: this.path,
-      tasks: Array.from(this.tasks.keys()),
+      tasks: [...Array.from(this.tasks.keys()), ...Array.from(this.sdtTasks.keys())],
     };
   };
 
@@ -73,5 +107,6 @@ export class CanvasWorkerModule extends CanvasModuleBase {
     this.log.trace('Destroying worker module');
     this.worker.terminate();
     this.tasks.clear();
+    this.sdtTasks.clear();
   };
 }
