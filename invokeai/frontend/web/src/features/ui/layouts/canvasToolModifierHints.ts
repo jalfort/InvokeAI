@@ -172,6 +172,9 @@ export const getCanvasToolModifierHintIds = ({
     gradient: () => [...SHARED_HINT_IDS],
     // FORK: selection tool (JA toolbox) — pan hint only; add/subtract/feather live in the settings UI.
     selection: () => ['spacePan'],
+    // FORK: soft + clone brush (JA toolbox, Phase B) — shift straight-line + size via mod+wheel.
+    softBrush: () => ['shiftStraightLine', 'modWheelResizeBrush', 'spacePan'],
+    cloneBrush: () => ['shiftStraightLine', 'modWheelResizeBrush', 'spacePan'],
     rect: ({ shapeType: st, isPrimaryPointerDown: pointerDown }) => {
       if (st === 'polygon') {
         return ['modErase', 'shiftSnap45Degrees', 'spacePan', 'altPickColor'];

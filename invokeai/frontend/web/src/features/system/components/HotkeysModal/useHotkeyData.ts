@@ -121,6 +121,9 @@ export const buildHotkeysData = (t: HotkeyTranslator, customHotkeys: CustomHotke
   addHotkey('canvas', 'selectColorPickerTool', ['i']);
   // FORK: selection tool (JA toolbox)
   addHotkey('canvas', 'selectSelectionTool', ['s']);
+  // FORK: soft + clone brush tools (JA toolbox, Phase B)
+  addHotkey('canvas', 'selectSoftBrushTool', ['k']);
+  addHotkey('canvas', 'selectCloneBrushTool', ['j']);
   addHotkey('canvas', 'setFillColorsToDefault', ['d']);
   addHotkey('canvas', 'toggleFillColor', ['x']);
   addHotkey('canvas', 'fitLayersToCanvas', ['mod+0']);

@@ -1,4 +1,7 @@
 // FORK: selection tool module lives under the fork/ path, not konva/CanvasTool/
+// FORK: soft + clone brush tool modules (Phase B) live under the fork/ path
+import { CanvasCloneBrushToolModule } from 'features/controlLayers/fork/brush/CanvasCloneBrushToolModule';
+import { CanvasSoftBrushToolModule } from 'features/controlLayers/fork/brush/CanvasSoftBrushToolModule';
 import { CanvasSelectionToolModule } from 'features/controlLayers/fork/selection/CanvasSelectionToolModule';
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
@@ -82,6 +85,9 @@ export class CanvasToolModule extends CanvasModuleBase {
     gradient: CanvasGradientToolModule;
     // FORK: selection tool
     selection: CanvasSelectionToolModule;
+    // FORK: soft + clone brush tools (Phase B)
+    softBrush: CanvasSoftBrushToolModule;
+    cloneBrush: CanvasCloneBrushToolModule;
     colorPicker: CanvasColorPickerToolModule;
     bbox: CanvasBboxToolModule;
     view: CanvasViewToolModule;
@@ -144,6 +150,9 @@ export class CanvasToolModule extends CanvasModuleBase {
       gradient: new CanvasGradientToolModule(this),
       // FORK: selection tool
       selection: new CanvasSelectionToolModule(this),
+      // FORK: soft + clone brush tools (Phase B)
+      softBrush: new CanvasSoftBrushToolModule(this),
+      cloneBrush: new CanvasCloneBrushToolModule(this),
       colorPicker: new CanvasColorPickerToolModule(this),
       bbox: new CanvasBboxToolModule(this),
       text: new CanvasTextToolModule(this),
@@ -165,6 +174,9 @@ export class CanvasToolModule extends CanvasModuleBase {
     this.konva.group.add(this.tools.lasso.konva.group);
     // FORK: register selection overlay group
     this.konva.group.add(this.tools.selection.konva.group);
+    // FORK: register soft + clone brush groups (Phase B)
+    this.konva.group.add(this.tools.softBrush.konva.group);
+    this.konva.group.add(this.tools.cloneBrush.konva.group);
 
     this.subscriptions.add(this.manager.stage.$stageAttrs.listen(this.render));
     this.subscriptions.add(this.manager.$isBusy.listen(this.render));
@@ -252,6 +264,12 @@ export class CanvasToolModule extends CanvasModuleBase {
         stage.setCursor('not-allowed');
       } else if (tool === 'brush') {
         this.tools.brush.syncCursorStyle();
+      } else if (tool === 'softBrush') {
+        // FORK: soft brush is a drawing tool (needs a drawable entity)
+        this.tools.softBrush.syncCursorStyle();
+      } else if (tool === 'cloneBrush') {
+        // FORK: clone brush is a drawing tool (needs a drawable entity)
+        this.tools.cloneBrush.syncCursorStyle();
       } else if (tool === 'eraser') {
         this.tools.eraser.syncCursorStyle();
       } else if (tool === 'move') {
@@ -280,6 +298,9 @@ export class CanvasToolModule extends CanvasModuleBase {
     this.tools.lasso.render();
     // FORK: render selection overlay
     this.tools.selection.render();
+    // FORK: render soft + clone brush cursors/previews (Phase B)
+    this.tools.softBrush.render();
+    this.tools.cloneBrush.render();
   };
 
   syncCursorPositions = () => {
@@ -457,6 +478,12 @@ export class CanvasToolModule extends CanvasModuleBase {
 
       if (tool === 'brush') {
         await this.tools.brush.onStagePointerEnter(e);
+      } else if (tool === 'softBrush') {
+        // FORK: soft brush (Phase B)
+        await this.tools.softBrush.onStagePointerEnter(e);
+      } else if (tool === 'cloneBrush') {
+        // FORK: clone brush (Phase B)
+        await this.tools.cloneBrush.onStagePointerEnter(e);
       } else if (tool === 'eraser') {
         await this.tools.eraser.onStagePointerEnter(e);
       } else if (tool === 'text') {
@@ -495,6 +522,12 @@ export class CanvasToolModule extends CanvasModuleBase {
 
       if (tool === 'brush') {
         await this.tools.brush.onStagePointerDown(e);
+      } else if (tool === 'softBrush') {
+        // FORK: soft brush (Phase B)
+        await this.tools.softBrush.onStagePointerDown(e);
+      } else if (tool === 'cloneBrush') {
+        // FORK: clone brush (Phase B)
+        await this.tools.cloneBrush.onStagePointerDown(e);
       } else if (tool === 'eraser') {
         await this.tools.eraser.onStagePointerDown(e);
       } else if (tool === 'rect') {
@@ -537,6 +570,12 @@ export class CanvasToolModule extends CanvasModuleBase {
 
       if (tool === 'brush') {
         this.tools.brush.onStagePointerUp(e);
+      } else if (tool === 'softBrush') {
+        // FORK: soft brush (Phase B)
+        this.tools.softBrush.onStagePointerUp(e);
+      } else if (tool === 'cloneBrush') {
+        // FORK: clone brush (Phase B)
+        this.tools.cloneBrush.onStagePointerUp(e);
       } else if (tool === 'eraser') {
         this.tools.eraser.onStagePointerUp(e);
       } else if (tool === 'rect') {
@@ -580,6 +619,12 @@ export class CanvasToolModule extends CanvasModuleBase {
 
       if (tool === 'brush') {
         await this.tools.brush.onStagePointerMove(e);
+      } else if (tool === 'softBrush') {
+        // FORK: soft brush (Phase B)
+        await this.tools.softBrush.onStagePointerMove(e);
+      } else if (tool === 'cloneBrush') {
+        // FORK: clone brush (Phase B)
+        await this.tools.cloneBrush.onStagePointerMove(e);
       } else if (tool === 'eraser') {
         await this.tools.eraser.onStagePointerMove(e);
       } else if (tool === 'rect') {
@@ -905,7 +950,8 @@ export class CanvasToolModule extends CanvasModuleBase {
     if (e.key === KEY_ALT) {
       const tool = this.$tool.get();
       // FORK: don't switch to color picker when selection tool is active (Alt used for subtract)
-      if (tool === 'selection') {
+      // or the clone brush is active (Alt used to set the clone source). Our JA tools own Alt.
+      if (tool === 'selection' || tool === 'cloneBrush') {
         e.preventDefault();
         return;
       }
@@ -1001,6 +1047,9 @@ export class CanvasToolModule extends CanvasModuleBase {
         gradient: this.tools.gradient.repr(),
         // FORK: selection tool
         selection: this.tools.selection.repr(),
+        // FORK: soft + clone brush tools (Phase B)
+        softBrush: this.tools.softBrush.repr(),
+        cloneBrush: this.tools.cloneBrush.repr(),
         bbox: this.tools.bbox.repr(),
         view: this.tools.view.repr(),
         move: this.tools.move.repr(),

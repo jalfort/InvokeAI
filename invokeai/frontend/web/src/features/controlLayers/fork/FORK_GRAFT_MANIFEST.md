@@ -28,11 +28,35 @@ never conflict. Paths are under `invokeai/frontend/web/src/`.
 
 _The selection button itself is registered in the fork drawer via `fork/toolbox/registry.ts` (fork-owned, not a seam)._
 
-## Phase B — soft + clone brush (planned)
+## Phase B — soft + clone brush
 
-| Status     | Upstream file                                                                                                                                                                                                                  | Seam                           |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| ⏳ Phase B | `_zTool`; `konva/CanvasEntity/CanvasEntityBufferObjectRenderer.ts` (:130 render branch, **:270 commitBuffer fix**, :294 commit switch); `konva/CanvasEntity/CanvasEntityObjectRenderer.ts` (needsPixelBbox); settings; hotkeys | soft + clone brush integration |
+Soft brush persists as a `soft_brush_line` object (position lives in entity-local `points`; baked to a
+`Konva.Image` on commit so `clone()` survives; re-renders on reload). Clone brush is buffer-only (a
+`clone_brush_line` has no meaning without its source snapshot) and bakes to a 0-origin `image` object on
+commit. Both live under `fork/brush/`; only the seams below touch upstream files.
+
+| Status  | Upstream file                                                 | Seam                                                                                                                                                                                                                                      | Why                                                      |
+| ------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| ✅ live | `features/controlLayers/store/types.ts`                       | `_zTool` += `softBrush`,`cloneBrush`; 4 soft Zod object-state schemas + types; 4 soft members in `zCanvasObjectState`; `EntitySoftBrushLineAddedPayload` + `EntityImageAddedPayload`                                                      | tool enum, persisted soft state, add-payload types       |
+| ✅ live | `features/controlLayers/konva/CanvasObject/types.ts`          | `AnyObjectRenderer` += `CanvasObjectSoftBrushLine`,`CanvasObjectCloneBrushLine`; `AnyObjectState` += 4 soft + 2 clone state types                                                                                                         | renderer/state unions accept the fork objects            |
+| ✅ live | `konva/CanvasEntity/CanvasEntityBufferObjectRenderer.ts`      | import 2 fork classes + upload helpers; live render branches (4 soft, 2 clone); **commitBuffer double-push fix** (`{ pushToState = true } = options ?? {}`); commit switch soft→`addSoftBrushLine`, clone→bake+`commitCloneStrokeAsImage` | live buffer render + commit (rasterize/persist)          |
+| ✅ live | `konva/CanvasEntity/CanvasEntityObjectRenderer.ts`            | import `CanvasObjectSoftBrushLine`; `renderObject` combined soft branch (re-render persisted soft strokes); `needsPixelBbox` += `isSoftBrush`                                                                                             | persisted soft strokes re-render + accurate bbox         |
+| ✅ live | `konva/CanvasStateApiModule.ts`                               | `addSoftBrushLine` + `addImage` (dispatch the two new actions)                                                                                                                                                                            | state-API entry points for commit                        |
+| ✅ live | `store/canvasSlice.ts`                                        | `entitySoftBrushLineAdded` + `entityImageAdded` reducers/actions/exports; added to `doNotGroupMatcher`                                                                                                                                    | reducers pushing the committed objects                   |
+| ✅ live | `store/canvasSettingsSlice.ts`                                | soft: `softBrushHardness`/`softBrushOpacity`/`softBrushErase`; clone: `brushHardness`/`brushOpacity`/`cloneBrushAlignedMode`/`cloneBrushSampleMode` (+ enum) — schema/defaults/reducers/actions/selectors (size reuses `brushWidth`)      | per-brush settings                                       |
+| ✅ live | `konva/CanvasTool/CanvasToolModule.ts`                        | import 2 fork tool modules; `tools` field+init+`group.add`; `syncCursorStyle` (entity branch); `render()`; pointer enter/down/up/move dispatch (behind `getCanDraw()`); `repr()`                                                          | tool integration (drawing tools, need a drawable entity) |
+| ✅ live | `features/ui/layouts/canvasToolModifierHints.ts`              | `softBrush` + `cloneBrush` resolver entries (Record<Tool> is exhaustive)                                                                                                                                                                  | compiler-required per-tool hint entries                  |
+| ✅ live | `features/system/components/HotkeysModal/useHotkeyData.ts`    | `addHotkey('canvas','selectSoftBrushTool',['k'])` + `selectCloneBrushTool',['j']`                                                                                                                                                         | brush hotkeys                                            |
+| ✅ live | `features/controlLayers/components/Toolbar/CanvasToolbar.tsx` | mount `<ToolSoftBrushSettings/>` / `<ToolCloneBrushSettings/>` when the tool is selected                                                                                                                                                  | brush settings rows                                      |
+| ✅ live | `public/locales/en.json`                                      | `controlLayers.tool.softBrush`/`cloneBrush` + `hotkeys.canvas.selectSoftBrushTool.*` / `selectCloneBrushTool.*`                                                                                                                           | i18n (button + hotkeys modal)                            |
+
+_Fork-owned (not seams): `fork/brush/` (brushBuffer, 2 object renderers, 2 tool modules, 2 buttons, 2 settings rows) + registration in `fork/toolbox/registry.ts`._
+
+> **Clone commit positioning note:** the baked clone stroke is a clip-sized canvas at entity-local
+> `(strokeOffsetX, strokeOffsetY)`. Image objects render at the entity origin `(0,0)` with no position
+> field, so `commitCloneStrokeAsImage` re-draws the stroke onto a 0-origin canvas at that offset before
+> upload. Non-negative offsets (the common `clipToBbox` case) are exact; a negative offset only clips
+> the transparent falloff pad (≤ brush radius) off the top/left — never painted content.
 
 ## Phase C — annotation directive overlay (planned, re-architected lighter)
 

@@ -67,10 +67,12 @@ import type {
   EntityEraserLineAddedPayload,
   EntityGradientAddedPayload,
   EntityIdentifierPayload,
+  EntityImageAddedPayload, // FORK (Phase B): baked clone-stroke image add
   EntityLassoAddedPayload,
   EntityMovedToPayload,
   EntityRasterizedPayload,
   EntityShapeAddedPayload,
+  EntitySoftBrushLineAddedPayload, // FORK (Phase B): soft brush/eraser persist
   IPMethodV2,
   T2IAdapterConfig,
   ZImageControlConfig,
@@ -1579,6 +1581,27 @@ const slice = createSlice({
       // re-render it (reference equality check). I don't like this behaviour.
       entity.objects.push({ ...shape });
     },
+    // FORK (Phase B): persist a soft brush / soft eraser line. Points are entity-local, so no
+    // positioning metadata is needed (mirrors entityBrushLineAdded). Not simplified — the soft
+    // renderer re-dabs the exact path.
+    entitySoftBrushLineAdded: (state, action: PayloadAction<EntitySoftBrushLineAddedPayload>) => {
+      const { entityIdentifier, softBrushLine } = action.payload;
+      const entity = selectEntity(state, entityIdentifier);
+      if (!entity) {
+        return;
+      }
+      entity.objects.push({ ...softBrushLine });
+    },
+    // FORK (Phase B): push a baked image object (used by the clone brush, which bakes its stroke to
+    // a 0-origin image on commit since clone_brush_line has no meaning without its source snapshot).
+    entityImageAdded: (state, action: PayloadAction<EntityImageAddedPayload>) => {
+      const { entityIdentifier, imageObject } = action.payload;
+      const entity = selectEntity(state, entityIdentifier);
+      if (!entity) {
+        return;
+      }
+      entity.objects.push({ ...imageObject });
+    },
     entityLassoAdded: (state, action: PayloadAction<EntityLassoAddedPayload>) => {
       const { entityIdentifier, lasso } = action.payload;
       const entity = selectEntity(state, entityIdentifier);
@@ -1910,6 +1933,8 @@ export const {
   entityRasterized,
   entityBrushLineAdded,
   entityEraserLineAdded,
+  entitySoftBrushLineAdded, // FORK (Phase B)
+  entityImageAdded, // FORK (Phase B)
   entityShapeAdded,
   entityLassoAdded,
   entityGradientAdded,
@@ -2046,6 +2071,8 @@ export const canvasSliceConfig: SliceConfig<typeof slice> = {
 const doNotGroupMatcher = isAnyOf(
   entityBrushLineAdded,
   entityEraserLineAdded,
+  entitySoftBrushLineAdded, // FORK (Phase B)
+  entityImageAdded, // FORK (Phase B)
   entityShapeAdded,
   entityLassoAdded,
   entityGradientAdded

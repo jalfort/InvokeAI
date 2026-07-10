@@ -20,6 +20,8 @@ const zSelectionMode = z.enum(['rectangle', 'ellipse', 'lasso', 'polygon']);
 export type SelectionMode = z.infer<typeof zSelectionMode>;
 const zSelectionFeatherDirection = z.enum(['both', 'inward', 'outward']);
 export type SelectionFeatherDirection = z.infer<typeof zSelectionFeatherDirection>;
+// FORK: clone brush (JA toolbox) — where the clone brush samples source pixels from.
+const zCloneBrushSampleMode = z.enum(['current_layer', 'current_and_below']);
 
 const zCanvasSettingsState = z.object({
   /**
@@ -160,6 +162,22 @@ const zCanvasSettingsState = z.object({
       b: z.number().int().min(0).max(255),
     })
     .default({ r: 220, g: 40, b: 40 }),
+  // FORK: soft brush (JA toolbox) — size reuses `brushWidth`; these are soft-specific.
+  /** Soft brush edge hardness (0 = fully soft falloff, 1 = crisp edge). */
+  softBrushHardness: z.number().min(0).max(1).default(0.5),
+  /** Soft brush stroke opacity (0-1). */
+  softBrushOpacity: z.number().min(0).max(1).default(1),
+  /** Whether the soft brush erases (destination-out) instead of painting. */
+  softBrushErase: z.boolean().default(false),
+  // FORK: clone brush (JA toolbox) — size reuses `brushWidth`.
+  /** Clone brush edge hardness (0 = soft falloff, 1 = crisp edge). */
+  brushHardness: z.number().min(0).max(1).default(1),
+  /** Clone brush stroke opacity (0-1). */
+  brushOpacity: z.number().min(0).max(1).default(1),
+  /** Whether the clone source offset stays aligned across strokes (true) or re-anchors each stroke. */
+  cloneBrushAlignedMode: z.boolean().default(true),
+  /** Which layers the clone brush samples from. */
+  cloneBrushSampleMode: zCloneBrushSampleMode.default('current_layer'),
 });
 
 type CanvasSettingsState = z.infer<typeof zCanvasSettingsState>;
@@ -198,6 +216,15 @@ const getInitialState = (): CanvasSettingsState => ({
   selectionFeatherDirection: 'both',
   selectionOverlayOpacity: 0.5,
   selectionOverlayColor: { r: 220, g: 40, b: 40 },
+  // FORK: soft brush (JA toolbox)
+  softBrushHardness: 0.5,
+  softBrushOpacity: 1,
+  softBrushErase: false,
+  // FORK: clone brush (JA toolbox)
+  brushHardness: 1,
+  brushOpacity: 1,
+  cloneBrushAlignedMode: true,
+  cloneBrushSampleMode: 'current_layer',
 });
 
 const slice = createSlice({
@@ -326,6 +353,35 @@ const slice = createSlice({
     settingsSelectionOverlayColorChanged: (state, action: PayloadAction<RgbColor>) => {
       state.selectionOverlayColor = action.payload;
     },
+    // FORK: soft brush (JA toolbox)
+    settingsSoftBrushHardnessChanged: (state, action: PayloadAction<CanvasSettingsState['softBrushHardness']>) => {
+      state.softBrushHardness = action.payload;
+    },
+    settingsSoftBrushOpacityChanged: (state, action: PayloadAction<CanvasSettingsState['softBrushOpacity']>) => {
+      state.softBrushOpacity = action.payload;
+    },
+    settingsSoftBrushEraseChanged: (state, action: PayloadAction<CanvasSettingsState['softBrushErase']>) => {
+      state.softBrushErase = action.payload;
+    },
+    // FORK: clone brush (JA toolbox)
+    settingsBrushHardnessChanged: (state, action: PayloadAction<CanvasSettingsState['brushHardness']>) => {
+      state.brushHardness = action.payload;
+    },
+    settingsBrushOpacityChanged: (state, action: PayloadAction<CanvasSettingsState['brushOpacity']>) => {
+      state.brushOpacity = action.payload;
+    },
+    settingsCloneBrushAlignedModeChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['cloneBrushAlignedMode']>
+    ) => {
+      state.cloneBrushAlignedMode = action.payload;
+    },
+    settingsCloneBrushSampleModeChanged: (
+      state,
+      action: PayloadAction<CanvasSettingsState['cloneBrushSampleMode']>
+    ) => {
+      state.cloneBrushSampleMode = action.payload;
+    },
   },
 });
 
@@ -365,6 +421,15 @@ export const {
   settingsSelectionFeatherDirectionChanged,
   settingsSelectionOverlayOpacityChanged,
   settingsSelectionOverlayColorChanged,
+  // FORK: soft brush (JA toolbox)
+  settingsSoftBrushHardnessChanged,
+  settingsSoftBrushOpacityChanged,
+  settingsSoftBrushEraseChanged,
+  // FORK: clone brush (JA toolbox)
+  settingsBrushHardnessChanged,
+  settingsBrushOpacityChanged,
+  settingsCloneBrushAlignedModeChanged,
+  settingsCloneBrushSampleModeChanged,
 } = slice.actions;
 
 export const canvasSettingsSliceConfig: SliceConfig<typeof slice> = {
@@ -419,3 +484,14 @@ export const selectSelectionOverlayOpacity = createCanvasSettingsSelector(
   (settings) => settings.selectionOverlayOpacity
 );
 export const selectSelectionOverlayColor = createCanvasSettingsSelector((settings) => settings.selectionOverlayColor);
+
+// FORK: soft brush (JA toolbox)
+export const selectSoftBrushHardness = createCanvasSettingsSelector((settings) => settings.softBrushHardness);
+export const selectSoftBrushOpacity = createCanvasSettingsSelector((settings) => settings.softBrushOpacity);
+export const selectSoftBrushErase = createCanvasSettingsSelector((settings) => settings.softBrushErase);
+
+// FORK: clone brush (JA toolbox)
+export const selectBrushHardness = createCanvasSettingsSelector((settings) => settings.brushHardness);
+export const selectBrushOpacity = createCanvasSettingsSelector((settings) => settings.brushOpacity);
+export const selectCloneBrushAlignedMode = createCanvasSettingsSelector((settings) => settings.cloneBrushAlignedMode);
+export const selectCloneBrushSampleMode = createCanvasSettingsSelector((settings) => settings.cloneBrushSampleMode);

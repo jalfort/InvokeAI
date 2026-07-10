@@ -119,6 +119,8 @@ const _zTool = z.enum([
   'colorPicker',
   'text',
   'selection',
+  'softBrush', // FORK: soft brush tool (Phase B)
+  'cloneBrush', // FORK: clone brush tool (Phase B)
 ]);
 export type Tool = z.infer<typeof _zTool>;
 
@@ -268,6 +270,54 @@ const zCanvasEraserLineWithPressureState = z.object({
 });
 export type CanvasEraserLineWithPressureState = z.infer<typeof zCanvasEraserLineWithPressureState>;
 
+// FORK (Phase B): soft brush + soft eraser line object-state schemas. Persisted (rasterized to a
+// Konva.Image on commit) so they re-render on reload. Rendered by the fork CanvasObjectSoftBrushLine.
+const zCanvasSoftBrushLineState = z.object({
+  id: zId,
+  type: z.literal('soft_brush_line'),
+  strokeWidth: z.number().min(1),
+  points: zPoints,
+  color: zRgbaColor,
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  clip: zRect.nullable(),
+});
+export type CanvasSoftBrushLineState = z.infer<typeof zCanvasSoftBrushLineState>;
+
+const zCanvasSoftBrushLineWithPressureState = z.object({
+  id: zId,
+  type: z.literal('soft_brush_line_with_pressure'),
+  strokeWidth: z.number().min(1),
+  points: zPointsWithPressure,
+  color: zRgbaColor,
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  clip: zRect.nullable(),
+});
+export type CanvasSoftBrushLineWithPressureState = z.infer<typeof zCanvasSoftBrushLineWithPressureState>;
+
+const zCanvasSoftEraserLineState = z.object({
+  id: zId,
+  type: z.literal('soft_eraser_line'),
+  strokeWidth: z.number().min(1),
+  points: zPoints,
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  clip: zRect.nullable(),
+});
+export type CanvasSoftEraserLineState = z.infer<typeof zCanvasSoftEraserLineState>;
+
+const zCanvasSoftEraserLineWithPressureState = z.object({
+  id: zId,
+  type: z.literal('soft_eraser_line_with_pressure'),
+  strokeWidth: z.number().min(1),
+  points: zPointsWithPressure,
+  hardness: z.number().min(0).max(1),
+  opacity: z.number().min(0).max(1),
+  clip: zRect.nullable(),
+});
+export type CanvasSoftEraserLineWithPressureState = z.infer<typeof zCanvasSoftEraserLineWithPressureState>;
+
 const zCanvasRectState = z.object({
   id: zId,
   type: z.literal('rect'),
@@ -366,6 +416,11 @@ const zCanvasObjectState = z.union([
   zCanvasBrushLineWithPressureState,
   zCanvasEraserLineWithPressureState,
   zCanvasGradientState,
+  // FORK (Phase B): soft brush + soft eraser line variants
+  zCanvasSoftBrushLineState,
+  zCanvasSoftBrushLineWithPressureState,
+  zCanvasSoftEraserLineState,
+  zCanvasSoftEraserLineWithPressureState,
 ]);
 export type CanvasObjectState = z.infer<typeof zCanvasObjectState>;
 
@@ -1045,6 +1100,16 @@ export type EntityBrushLineAddedPayload = EntityIdentifierPayload<{
 export type EntityEraserLineAddedPayload = EntityIdentifierPayload<{
   eraserLine: CanvasEraserLineState | CanvasEraserLineWithPressureState;
 }>;
+// FORK (Phase B): soft brush persist payload (any of the 4 soft variants) + generic image-object add
+// payload (used to persist the baked clone stroke).
+export type EntitySoftBrushLineAddedPayload = EntityIdentifierPayload<{
+  softBrushLine:
+    | CanvasSoftBrushLineState
+    | CanvasSoftBrushLineWithPressureState
+    | CanvasSoftEraserLineState
+    | CanvasSoftEraserLineWithPressureState;
+}>;
+export type EntityImageAddedPayload = EntityIdentifierPayload<{ imageObject: CanvasImageState }>;
 export type EntityLassoAddedPayload = EntityIdentifierPayload<{ lasso: CanvasLassoState }>;
 export type EntityShapeAddedPayload = EntityIdentifierPayload<{ shape: CanvasShapeState }>;
 export type EntityGradientAddedPayload = EntityIdentifierPayload<{ gradient: CanvasGradientState }>;

@@ -804,6 +804,14 @@
                 "title": "Selection Tool",
                 "desc": "Select the selection tool."
             },
+            "selectSoftBrushTool": {
+                "title": "Soft Brush Tool",
+                "desc": "Select the soft brush tool."
+            },
+            "selectCloneBrushTool": {
+                "title": "Clone Brush Tool",
+                "desc": "Select the clone brush tool."
+            },
             "selectEraserTool": {
                 "title": "Eraser Tool",
                 "desc": "Select the eraser tool."
@@ -3016,7 +3024,9 @@
             "view": "View",
             "colorPicker": "Color Picker",
             "text": "Text",
-            "selection": "Selection"
+            "selection": "Selection",
+            "softBrush": "Soft Brush",
+            "cloneBrush": "Clone Brush"
         },
         "filter": {
             "filter": "Filter",

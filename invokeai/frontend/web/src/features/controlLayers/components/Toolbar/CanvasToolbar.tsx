@@ -19,6 +19,9 @@ import { CanvasToolbarSaveToGalleryButton } from 'features/controlLayers/compone
 import { CanvasToolbarScale } from 'features/controlLayers/components/Toolbar/CanvasToolbarScale';
 import { CanvasToolbarSnapshotMenuButton } from 'features/controlLayers/components/Toolbar/CanvasToolbarSnapshotMenuButton';
 import { CanvasToolbarUndoButton } from 'features/controlLayers/components/Toolbar/CanvasToolbarUndoButton';
+// FORK: soft + clone brush settings (JA toolbox, Phase B)
+import { ToolCloneBrushSettings } from 'features/controlLayers/fork/brush/ToolCloneBrushSettings';
+import { ToolSoftBrushSettings } from 'features/controlLayers/fork/brush/ToolSoftBrushSettings';
 // FORK: selection tool settings (JA toolbox)
 import { ToolSelectionSettings } from 'features/controlLayers/fork/selection/ToolSelectionSettings';
 import { useCanvasDeleteLayerHotkey } from 'features/controlLayers/hooks/useCanvasDeleteLayerHotkey';
@@ -44,6 +47,9 @@ export const CanvasToolbar = memo(() => {
   const isGradientSelected = useToolIsSelected('gradient');
   // FORK: selection tool (JA toolbox)
   const isSelectionSelected = useToolIsSelected('selection');
+  // FORK: soft + clone brush tools (JA toolbox, Phase B)
+  const isSoftBrushSelected = useToolIsSelected('softBrush');
+  const isCloneBrushSelected = useToolIsSelected('cloneBrush');
   const showToolWithPicker = useMemo(() => {
     return !isTextSelected && (isBrushSelected || isEraserSelected);
   }, [isBrushSelected, isEraserSelected, isTextSelected]);
@@ -89,6 +95,9 @@ export const CanvasToolbar = memo(() => {
         )}
         {/* FORK: selection tool settings (JA toolbox) */}
         {isSelectionSelected && <ToolSelectionSettings />}
+        {/* FORK: soft + clone brush settings (JA toolbox, Phase B) */}
+        {isSoftBrushSelected && <ToolSoftBrushSettings />}
+        {isCloneBrushSelected && <ToolCloneBrushSettings />}
         {isTextSelected ? <TextToolOptions /> : showToolWithPicker && <ToolWidthPicker />}
       </ToolOptionsRowContainer>
       <Flex alignItems="center" h="full" flexGrow={1} flexShrink={0} justifyContent="flex-end" minW="fit-content">

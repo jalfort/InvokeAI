@@ -21,12 +21,14 @@ import {
   entityBrushLineAdded,
   entityEraserLineAdded,
   entityGradientAdded,
+  entityImageAdded, // FORK (Phase B): baked clone-stroke image add
   entityLassoAdded,
   entityMovedBy,
   entityMovedTo,
   entityRasterized,
   entityReset,
   entityShapeAdded,
+  entitySoftBrushLineAdded, // FORK (Phase B): soft brush/eraser persist
   inpaintMaskAdded,
   rasterLayerAdded,
   rgAdded,
@@ -44,11 +46,13 @@ import type {
   EntityEraserLineAddedPayload,
   EntityGradientAddedPayload,
   EntityIdentifierPayload,
+  EntityImageAddedPayload, // FORK (Phase B)
   EntityLassoAddedPayload,
   EntityMovedByPayload,
   EntityMovedToPayload,
   EntityRasterizedPayload,
   EntityShapeAddedPayload,
+  EntitySoftBrushLineAddedPayload, // FORK (Phase B)
   Rect,
   RgbaColor,
 } from 'features/controlLayers/store/types';
@@ -168,6 +172,21 @@ export class CanvasStateApiModule extends CanvasModuleBase {
    */
   addEraserLine = (arg: EntityEraserLineAddedPayload) => {
     this.store.dispatch(entityEraserLineAdded(arg));
+  };
+
+  /**
+   * FORK (Phase B): Adds a soft brush / soft eraser line to an entity, pushing state to redux.
+   */
+  addSoftBrushLine = (arg: EntitySoftBrushLineAddedPayload) => {
+    this.store.dispatch(entitySoftBrushLineAdded(arg));
+  };
+
+  /**
+   * FORK (Phase B): Adds a baked image object to an entity (used to persist the clone brush stroke),
+   * pushing state to redux.
+   */
+  addImage = (arg: EntityImageAddedPayload) => {
+    this.store.dispatch(entityImageAdded(arg));
   };
 
   /**

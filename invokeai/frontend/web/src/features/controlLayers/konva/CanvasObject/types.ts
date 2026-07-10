@@ -1,3 +1,10 @@
+// FORK (Phase B): soft + clone brush renderers and their buffer-only state types.
+import type {
+  CanvasCloneBrushLineState,
+  CanvasCloneBrushLineWithPressureState,
+  CanvasObjectCloneBrushLine,
+} from 'features/controlLayers/fork/brush/CanvasObjectCloneBrushLine';
+import type { CanvasObjectSoftBrushLine } from 'features/controlLayers/fork/brush/CanvasObjectSoftBrushLine';
 import type { CanvasObjectBrushLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectBrushLine';
 import type { CanvasObjectBrushLineWithPressure } from 'features/controlLayers/konva/CanvasObject/CanvasObjectBrushLineWithPressure';
 import type { CanvasObjectEraserLine } from 'features/controlLayers/konva/CanvasObject/CanvasObjectEraserLine';
@@ -19,6 +26,10 @@ import type {
   CanvasOvalState,
   CanvasPolygonState,
   CanvasRectState,
+  CanvasSoftBrushLineState,
+  CanvasSoftBrushLineWithPressureState,
+  CanvasSoftEraserLineState,
+  CanvasSoftEraserLineWithPressureState,
 } from 'features/controlLayers/store/types';
 
 /**
@@ -35,7 +46,10 @@ export type AnyObjectRenderer =
   | CanvasObjectOval
   | CanvasObjectPolygon
   | CanvasObjectImage
-  | CanvasObjectGradient;
+  | CanvasObjectGradient
+  // FORK (Phase B): one renderer class each handles all soft / clone variants
+  | CanvasObjectSoftBrushLine
+  | CanvasObjectCloneBrushLine;
 /**
  * Union of all object states.
  */
@@ -49,4 +63,11 @@ export type AnyObjectState =
   | CanvasLassoState
   | CanvasOvalState
   | CanvasPolygonState
-  | CanvasGradientState;
+  | CanvasGradientState
+  // FORK (Phase B): soft brush (persisted Zod state) + clone brush (buffer-only TS state)
+  | CanvasSoftBrushLineState
+  | CanvasSoftBrushLineWithPressureState
+  | CanvasSoftEraserLineState
+  | CanvasSoftEraserLineWithPressureState
+  | CanvasCloneBrushLineState
+  | CanvasCloneBrushLineWithPressureState;

@@ -1,6 +1,8 @@
 import { rgbColorToString } from 'common/util/colorCodeTransformers';
 import { SyncableMap } from 'common/util/SyncableMap/SyncableMap';
 import { throttle } from 'es-toolkit/compat';
+// FORK (Phase B): persisted soft brush/eraser strokes re-render through this fork renderer.
+import { CanvasObjectSoftBrushLine } from 'features/controlLayers/fork/brush/CanvasObjectSoftBrushLine';
 import type { CanvasEntityAdapter } from 'features/controlLayers/konva/CanvasEntity/types';
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
@@ -391,6 +393,22 @@ export class CanvasEntityObjectRenderer extends CanvasModuleBase {
       }
 
       didRender = renderer.update(objectState, force || isFirstRender);
+    } else if (
+      // FORK (Phase B): re-render a persisted soft brush/eraser stroke (one renderer, 4 variants).
+      objectState.type === 'soft_brush_line' ||
+      objectState.type === 'soft_brush_line_with_pressure' ||
+      objectState.type === 'soft_eraser_line' ||
+      objectState.type === 'soft_eraser_line_with_pressure'
+    ) {
+      assert(renderer instanceof CanvasObjectSoftBrushLine || !renderer);
+
+      if (!renderer) {
+        renderer = new CanvasObjectSoftBrushLine(objectState, this);
+        this.renderers.set(renderer.id, renderer);
+        this.konva.objectGroup.add(renderer.konva.group);
+      }
+
+      didRender = renderer.update(objectState, force || isFirstRender);
     } else if (objectState.type === 'rect') {
       assert(renderer instanceof CanvasObjectRect || !renderer);
 
@@ -486,6 +504,9 @@ export class CanvasEntityObjectRenderer extends CanvasModuleBase {
       const isImage = renderer instanceof CanvasObjectImage;
       const imageIgnoresTransparency = isImage && renderer.state.usePixelBbox === false;
       const hasClip = renderer instanceof CanvasObjectBrushLine && renderer.state.clip;
+      // FORK (Phase B): soft strokes have transparent falloff edges (and destination-out eraser
+      // variants), so getClientRect over-reports — force the accurate pixel bbox.
+      const isSoftBrush = renderer instanceof CanvasObjectSoftBrushLine;
       if (
         isEraserLine ||
         isSubtractingLasso ||
@@ -493,6 +514,7 @@ export class CanvasEntityObjectRenderer extends CanvasModuleBase {
         isSubtractOval ||
         isSubtractPolygon ||
         hasClip ||
+        isSoftBrush ||
         (isImage && !imageIgnoresTransparency)
       ) {
         needsPixelBbox = true;

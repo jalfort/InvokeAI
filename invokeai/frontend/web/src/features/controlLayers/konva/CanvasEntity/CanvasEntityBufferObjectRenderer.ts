@@ -1,4 +1,7 @@
 import { deepClone } from 'common/util/deepClone';
+// FORK (Phase B): soft + clone brush renderers, and helpers to persist a baked clone stroke.
+import { CanvasObjectCloneBrushLine } from 'features/controlLayers/fork/brush/CanvasObjectCloneBrushLine';
+import { CanvasObjectSoftBrushLine } from 'features/controlLayers/fork/brush/CanvasObjectSoftBrushLine';
 import type { CanvasEntityAdapter } from 'features/controlLayers/konva/CanvasEntity/types';
 import type { CanvasManager } from 'features/controlLayers/konva/CanvasManager';
 import { CanvasModuleBase } from 'features/controlLayers/konva/CanvasModuleBase';
@@ -14,9 +17,12 @@ import { CanvasObjectPolygon } from 'features/controlLayers/konva/CanvasObject/C
 import { CanvasObjectRect } from 'features/controlLayers/konva/CanvasObject/CanvasObjectRect';
 import type { AnyObjectRenderer, AnyObjectState } from 'features/controlLayers/konva/CanvasObject/types';
 import { shouldPreserveSuspendableShapesSession } from 'features/controlLayers/konva/CanvasTool/toolHotkeys';
-import { getPrefixedId } from 'features/controlLayers/konva/util';
+import { canvasToBlob, getPrefixedId } from 'features/controlLayers/konva/util';
+import type { CanvasEntityIdentifier } from 'features/controlLayers/store/types';
+import { imageDTOToImageObject } from 'features/controlLayers/store/util';
 import Konva from 'konva';
 import type { Logger } from 'roarr';
+import { uploadImage } from 'services/api/endpoints/images';
 import { assert } from 'tsafe';
 
 /**
@@ -145,6 +151,34 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
       }
 
       didRender = this.renderer.update(this.state, true);
+    } else if (
+      // FORK (Phase B): one renderer handles all 4 soft brush/eraser variants.
+      this.state.type === 'soft_brush_line' ||
+      this.state.type === 'soft_brush_line_with_pressure' ||
+      this.state.type === 'soft_eraser_line' ||
+      this.state.type === 'soft_eraser_line_with_pressure'
+    ) {
+      assert(this.renderer instanceof CanvasObjectSoftBrushLine || !this.renderer);
+
+      if (!this.renderer) {
+        this.renderer = new CanvasObjectSoftBrushLine(this.state, this);
+        this.konva.group.add(this.renderer.konva.group);
+      }
+
+      didRender = this.renderer.update(this.state, true);
+    } else if (
+      // FORK (Phase B): clone brush live buffer (2 variants, one renderer).
+      this.state.type === 'clone_brush_line' ||
+      this.state.type === 'clone_brush_line_with_pressure'
+    ) {
+      assert(this.renderer instanceof CanvasObjectCloneBrushLine || !this.renderer);
+
+      if (!this.renderer) {
+        this.renderer = new CanvasObjectCloneBrushLine(this.state, this);
+        this.konva.group.add(this.renderer.konva.group);
+      }
+
+      didRender = this.renderer.update(this.state, true);
     } else if (this.state.type === 'eraser_line') {
       assert(this.renderer instanceof CanvasObjectEraserLine || !this.renderer);
 
@@ -267,7 +301,11 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
    * Commits the current buffer object, pushing the buffer object state back to the application state.
    */
   commitBuffer = (options?: { pushToState?: boolean }) => {
-    const { pushToState } = { ...options, pushToState: true };
+    // FORK (Phase B): upstream ships `{ ...options, pushToState: true }`, which ALWAYS forces
+    // pushToState true (a latent bug) — harmless until a brush case lands in the commit switch, then
+    // it double-pushes committed strokes. Spread options LAST so an explicit `pushToState: false`
+    // (used by the async image-commit path below) is honoured.
+    const { pushToState = true } = options ?? {};
 
     if (!this.state || !this.renderer) {
       this.log.trace('No buffer to commit');
@@ -286,6 +324,26 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
       this.renderer.update(committedState, true);
     }
 
+    // FORK (Phase B): soft + clone brush renderers use a custom sceneFunc Shape that does NOT survive
+    // Konva's clone() (used by the transformer / rasterization). Bake the stroke into a Konva.Image so
+    // the adopted node clones correctly. Done before/after adopt is equivalent (swaps the shape inside
+    // the already-moved group).
+    if (this.renderer instanceof CanvasObjectSoftBrushLine || this.renderer instanceof CanvasObjectCloneBrushLine) {
+      this.renderer.rasterizeToImage();
+    }
+
+    // FORK (Phase B): the clone stroke cannot persist as a `clone_brush_line` (it has no meaning on
+    // reload without its source snapshot, and 6.13 keeps clone states buffer-only). Capture the baked
+    // canvas now (before the renderer is cleared) and commit it asynchronously as an `image` object.
+    let cloneBaked: { canvas: HTMLCanvasElement; x: number; y: number } | null = null;
+    if (
+      pushToState &&
+      this.renderer instanceof CanvasObjectCloneBrushLine &&
+      (committedState.type === 'clone_brush_line' || committedState.type === 'clone_brush_line_with_pressure')
+    ) {
+      cloneBaked = this.renderer.getBakedCanvas();
+    }
+
     // Move the buffer to the persistent objects group/renderers
     this.parent.renderer.adoptObjectRenderer(this.renderer);
 
@@ -299,6 +357,20 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
         case 'eraser_line':
         case 'eraser_line_with_pressure':
           this.manager.stateApi.addEraserLine({ entityIdentifier, eraserLine: committedState });
+          break;
+        // FORK (Phase B): persist the soft brush/eraser line (points are entity-local, position-correct).
+        case 'soft_brush_line':
+        case 'soft_brush_line_with_pressure':
+        case 'soft_eraser_line':
+        case 'soft_eraser_line_with_pressure':
+          this.manager.stateApi.addSoftBrushLine({ entityIdentifier, softBrushLine: committedState });
+          break;
+        // FORK (Phase B): clone stroke persists as a baked image (async, see cloneBaked above).
+        case 'clone_brush_line':
+        case 'clone_brush_line_with_pressure':
+          if (cloneBaked) {
+            void this.commitCloneStrokeAsImage(entityIdentifier, cloneBaked);
+          }
           break;
         case 'rect':
         case 'oval':
@@ -316,6 +388,46 @@ export class CanvasEntityBufferObjectRenderer extends CanvasModuleBase {
 
     this.renderer = null;
     this.state = null;
+  };
+
+  /**
+   * FORK (Phase B): Persists a baked clone-brush stroke as an `image` object on the target entity.
+   *
+   * The baked stroke canvas is clip-sized and sits at entity-local origin `(baked.x, baked.y)`. Image
+   * objects render at the entity origin `(0,0)` with no position field, so we re-draw the stroke onto
+   * a 0-origin canvas at its entity-local offset before uploading. Non-negative offsets (the common
+   * `clipToBbox` case) are exact; a negative offset only clips the transparent falloff pad (≤ brush
+   * radius) off the top/left, never painted content. The adopted baked Konva.Image keeps the stroke
+   * visible until this async add re-renders the entity.
+   */
+  private commitCloneStrokeAsImage = async (
+    entityIdentifier: CanvasEntityIdentifier,
+    baked: { canvas: HTMLCanvasElement; x: number; y: number }
+  ): Promise<void> => {
+    try {
+      const width = Math.max(1, Math.ceil(baked.x + baked.canvas.width));
+      const height = Math.max(1, Math.ceil(baked.y + baked.canvas.height));
+      const positioned = document.createElement('canvas');
+      positioned.width = width;
+      positioned.height = height;
+      const ctx = positioned.getContext('2d');
+      if (!ctx) {
+        return;
+      }
+      ctx.drawImage(baked.canvas, baked.x, baked.y);
+
+      const blob = await canvasToBlob(positioned);
+      const imageDTO = await uploadImage({
+        file: new File([blob], 'clone_brush_stroke.png', { type: 'image/png' }),
+        image_category: 'other',
+        is_intermediate: true,
+        silent: true,
+      });
+      const imageObject = imageDTOToImageObject(imageDTO);
+      this.manager.stateApi.addImage({ entityIdentifier, imageObject });
+    } catch (error) {
+      this.log.error({ error: String(error) }, 'Failed to commit clone brush stroke as image');
+    }
   };
 
   destroy = () => {

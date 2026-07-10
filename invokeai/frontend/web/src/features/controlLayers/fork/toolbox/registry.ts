@@ -1,3 +1,5 @@
+import { ToolCloneBrushButton } from 'features/controlLayers/fork/brush/ToolCloneBrushButton';
+import { ToolSoftBrushButton } from 'features/controlLayers/fork/brush/ToolSoftBrushButton';
 import { ToolSelectionButton } from 'features/controlLayers/fork/selection/ToolSelectionButton';
 import type { Tool } from 'features/controlLayers/store/types';
 import type { FC } from 'react';
@@ -19,8 +21,8 @@ type JaToolEntry = {
 
 export const JA_TOOL_REGISTRY: JaToolEntry[] = [
   { tool: 'selection', Button: ToolSelectionButton },
-  // Phase B — { tool: 'softBrush', Button: ToolSoftBrushButton },
-  // Phase B — { tool: 'cloneBrush', Button: ToolCloneBrushButton },
+  { tool: 'softBrush', Button: ToolSoftBrushButton },
+  { tool: 'cloneBrush', Button: ToolCloneBrushButton },
   // Phase C — { tool: 'annotate', Button: ToolAnnotateButton },
 ];
 
